@@ -300,34 +300,6 @@ def build_email_content(
             </p>
         </div>
 
-        <!-- Key Metrics -->
-        <div style="padding: 24px; border-bottom: 1px solid {COLORS['light_gray']};">
-            <h3 style="margin: 0 0 16px; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: {COLORS['gold_muted']};">
-                Key Metrics
-            </h3>
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="padding: 16px; background-color: {COLORS['off_white']}; border-radius: 4px; width: 33%;">
-                        <div style="font-size: 11px; color: {COLORS['slate']}; text-transform: uppercase; letter-spacing: 0.5px;">Cumulative Return</div>
-                        <div style="font-size: 22px; font-weight: 600; color: {COLORS['navy']}; margin-top: 6px;">{current_pct*100:+.2f}%</div>
-                        <div style="font-size: 12px; color: {COLORS['silver']}; margin-top: 4px;">Since {current_start}</div>
-                    </td>
-                    <td style="width: 8px;"></td>
-                    <td style="padding: 16px; background-color: {COLORS['off_white']}; border-radius: 4px; width: 33%;">
-                        <div style="font-size: 11px; color: {COLORS['slate']}; text-transform: uppercase; letter-spacing: 0.5px;">Expected (Trend)</div>
-                        <div style="font-size: 22px; font-weight: 600; color: {COLORS['navy']}; margin-top: 6px;">{regression_line*100:+.2f}%</div>
-                        <div style="font-size: 12px; color: {COLORS['silver']}; margin-top: 4px;">Based on reference</div>
-                    </td>
-                    <td style="width: 8px;"></td>
-                    <td style="padding: 16px; background-color: {COLORS['off_white']}; border-radius: 4px; width: 33%;">
-                        <div style="font-size: 11px; color: {COLORS['slate']}; text-transform: uppercase; letter-spacing: 0.5px;">Distance to {next_band_label}</div>
-                        <div style="font-size: 22px; font-weight: 600; color: {COLORS['navy']}; margin-top: 6px;">{distance*100:.2f}%</div>
-                        <div style="font-size: 12px; color: {COLORS['silver']}; margin-top: 4px;">Next threshold</div>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
         <!-- Band Ladder -->
         <div style="padding: 24px; border-bottom: 1px solid {COLORS['light_gray']};">
             <h3 style="margin: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: {COLORS['gold_muted']};">
@@ -421,13 +393,6 @@ This model compares the cumulative percentage change of {symbol} during two peri
 A linear regression is fitted to the reference period's cumulative returns,
 establishing the historical trend. Standard deviation bands (±1σ to ±4σ)
 define zones of normal vs. abnormal deviation.
-
-KEY METRICS
------------
-  Latest Price:        ${latest_price:.2f}
-  Cumulative Return:   {current_pct*100:+.2f}% (since {current_start})
-  Expected (Trend):    {regression_line*100:+.2f}%
-  Distance to {next_band_label}:    {distance*100:.2f}%
 
 STATISTICAL BANDS
 -----------------
