@@ -40,3 +40,4 @@ websocket-client==1.8.0
 websockets==10.4
 yarl==1.17.1
 yfinance==0.2.49
+kaleido==0.2.1

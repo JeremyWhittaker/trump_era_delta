@@ -200,18 +200,22 @@ def calculate_regression_bands(df, max_stddev=4):
 
     return df
 
-def plot_comparison(symbol, df_original, df_original_truncated, df_new, output_dir, sma_window, source, plot_bands=False, plot_bollinger_bands=False):
+def plot_comparison(symbol, df_original, df_original_truncated, df_new, output_dir, sma_window, source, plot_bands=False, plot_bollinger_bands=False,
+                    original_start="2016-11-08", original_end="2020-11-03", new_start="2024-11-05"):
     """
-    Plots cumulative percent change, Bollinger Bands, and regression bands on the original period,
-    and compares with the new period's cumulative percent change.
-    Also plots regression line/bands on the truncated original data.
-    Additionally, saves the plot as a JPEG image and HTML file.
+    Plots cumulative percent change with regression bands, featuring:
+    - Clear color coding and legend grouping
+    - Dual x-axis showing aligned days AND actual dates
+    - Unified hover with detailed tooltips
+    - End-of-line annotations
+    - Professional HTML wrapper with methodology explanation
     """
     if df_new.empty:
         logging.warning(f"No new period data available for plotting for {symbol}. Skipping plot.")
         return None, None
 
-    # Prepare hover data and alignment indices
+    # ========== PREPARE DATA ==========
+    # Prepare hover data with customdata arrays
     df_original['hover_date'] = df_original['index'].dt.strftime('%Y-%m-%d')
     df_original['hover_price'] = df_original['adj_close']
     df_original_truncated['hover_date'] = df_original_truncated['index'].dt.strftime('%Y-%m-%d')
@@ -219,311 +223,683 @@ def plot_comparison(symbol, df_original, df_original_truncated, df_new, output_d
     df_new['hover_date'] = df_new['index'].dt.strftime('%Y-%m-%d')
     df_new['hover_price'] = df_new['adj_close']
 
-    # Get the latest price and date from the data
+    # Get the latest values
     latest_price = df_new.iloc[-1]['adj_close']
     latest_date = df_new.iloc[-1]['index']
     latest_datetime = latest_date.strftime('%Y-%m-%d %H:%M:%S %Z')
+    latest_date_short = latest_date.strftime('%Y-%m-%d')
+    latest_cum_pct = df_new.iloc[-1]['cumulative_pct_change']
 
-    # Create the plot
+    # Get current regression band
+    current_band = None
+    if 'regression_line' in df_original_truncated.columns:
+        reg_line_val = df_original_truncated['regression_line'].iloc[-1]
+        current_band = get_regression_band(latest_cum_pct, df_original_truncated)
+
+    # ========== COLOR PALETTE (Hedge Fund Style) ==========
+    COLORS = {
+        'original_period': '#1e3a5f',      # Navy blue
+        'new_period': '#c0392b',           # Rich red
+        'regression_full': '#2c3e50',      # Dark charcoal
+        'regression_truncated': '#27ae60', # Emerald green
+        'band_amber': 'rgba(212, 175, 55, {alpha})',  # Gold/amber
+        'band_green': 'rgba(39, 174, 96, {alpha})',   # Green
+        'bollinger': 'rgba(52, 152, 219, 0.2)',       # Light blue
+        'latest_marker': '#f1c40f',        # Bright gold
+        'grid': '#ecf0f1',
+        'text': '#2c3e50',
+    }
+
+    # ========== CREATE FIGURE ==========
     fig = go.Figure()
 
-    # Original period cumulative percent change
-    fig.add_trace(
-        go.Scatter(
-            x=df_original['day_index'],
-            y=df_original['cumulative_pct_change'],
-            mode='lines',
-            name='Original Period',
-            hoverinfo='skip',  # Disable hover for this trace
-            line=dict(color='blue')
-        )
-    )
+    # ========== REGRESSION BANDS (Full Original - Background) ==========
+    if plot_bands and 'regression_upper_band_1' in df_original.columns:
+        max_stddev = 4
+        band_alphas = [0.12, 0.09, 0.06, 0.03]  # Decreasing opacity for outer bands
 
-    # Bollinger Bands for original data
-    if plot_bollinger_bands and 'upper_band' in df_original.columns and 'lower_band' in df_original.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=df_original['day_index'],
-                y=df_original['upper_band'],
-                line=dict(color='rgba(0,0,0,0)'),  # Invisible line
-                name='Bollinger Bands',
-                showlegend=False,
-                hoverinfo='skip'  # Disable hover
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=df_original['day_index'],
-                y=df_original['lower_band'],
-                line=dict(color='rgba(0,0,0,0)'),  # Invisible line
+        # Upper bands (plot from outermost to innermost)
+        for i in range(max_stddev, 0, -1):
+            upper = df_original[f'regression_upper_band_{i}']
+            lower = df_original[f'regression_upper_band_{i-1}'] if i > 1 else df_original['regression_line']
+
+            fig.add_trace(go.Scatter(
+                x=df_original['day_index'], y=upper,
+                mode='lines', line=dict(width=0),
+                showlegend=False, hoverinfo='skip',
+                legendgroup='bands_original'
+            ))
+            fig.add_trace(go.Scatter(
+                x=df_original['day_index'], y=lower,
+                mode='lines', line=dict(width=0),
                 fill='tonexty',
-                fillcolor='rgba(173, 216, 230, 0.3)',  # Light blue fill
-                name='Bollinger Bands',
-                hoverinfo='skip',  # Disable hover
-                showlegend=True
-            )
-        )
+                fillcolor=COLORS['band_amber'].format(alpha=band_alphas[i-1]),
+                name='Historical σ Bands (Full Period)' if i == max_stddev else None,
+                showlegend=(i == max_stddev),
+                hoverinfo='skip',
+                legendgroup='bands_original'
+            ))
 
-    # Regression line and bands on df_original
+        # Lower bands
+        for i in range(max_stddev, 0, -1):
+            lower = df_original[f'regression_lower_band_{i}']
+            upper = df_original[f'regression_lower_band_{i-1}'] if i > 1 else df_original['regression_line']
+
+            fig.add_trace(go.Scatter(
+                x=df_original['day_index'], y=lower,
+                mode='lines', line=dict(width=0),
+                showlegend=False, hoverinfo='skip',
+                legendgroup='bands_original'
+            ))
+            fig.add_trace(go.Scatter(
+                x=df_original['day_index'], y=upper,
+                mode='lines', line=dict(width=0),
+                fill='tonexty',
+                fillcolor=COLORS['band_amber'].format(alpha=band_alphas[i-1]),
+                showlegend=False, hoverinfo='skip',
+                legendgroup='bands_original'
+            ))
+
+    # ========== REGRESSION BANDS (Truncated - Active Comparison) ==========
+    if plot_bands and 'regression_upper_band_1' in df_original_truncated.columns:
+        max_stddev = 4
+        band_alphas = [0.18, 0.14, 0.10, 0.06]
+
+        # Upper bands
+        for i in range(max_stddev, 0, -1):
+            upper = df_original_truncated[f'regression_upper_band_{i}']
+            lower = df_original_truncated[f'regression_upper_band_{i-1}'] if i > 1 else df_original_truncated['regression_line']
+
+            fig.add_trace(go.Scatter(
+                x=df_original_truncated['day_index'], y=upper,
+                mode='lines', line=dict(width=0),
+                showlegend=False, hoverinfo='skip',
+                legendgroup='bands_truncated'
+            ))
+            fig.add_trace(go.Scatter(
+                x=df_original_truncated['day_index'], y=lower,
+                mode='lines', line=dict(width=0),
+                fill='tonexty',
+                fillcolor=COLORS['band_green'].format(alpha=band_alphas[i-1]),
+                name='Active σ Bands (Matched Days)' if i == max_stddev else None,
+                showlegend=(i == max_stddev),
+                hoverinfo='skip',
+                legendgroup='bands_truncated'
+            ))
+
+        # Lower bands
+        for i in range(max_stddev, 0, -1):
+            lower = df_original_truncated[f'regression_lower_band_{i}']
+            upper = df_original_truncated[f'regression_lower_band_{i-1}'] if i > 1 else df_original_truncated['regression_line']
+
+            fig.add_trace(go.Scatter(
+                x=df_original_truncated['day_index'], y=lower,
+                mode='lines', line=dict(width=0),
+                showlegend=False, hoverinfo='skip',
+                legendgroup='bands_truncated'
+            ))
+            fig.add_trace(go.Scatter(
+                x=df_original_truncated['day_index'], y=upper,
+                mode='lines', line=dict(width=0),
+                fill='tonexty',
+                fillcolor=COLORS['band_green'].format(alpha=band_alphas[i-1]),
+                showlegend=False, hoverinfo='skip',
+                legendgroup='bands_truncated'
+            ))
+
+    # ========== BOLLINGER BANDS ==========
+    if plot_bollinger_bands and 'upper_band' in df_original.columns:
+        fig.add_trace(go.Scatter(
+            x=df_original['day_index'], y=df_original['upper_band'],
+            mode='lines', line=dict(width=0),
+            showlegend=False, hoverinfo='skip',
+            legendgroup='bollinger'
+        ))
+        fig.add_trace(go.Scatter(
+            x=df_original['day_index'], y=df_original['lower_band'],
+            mode='lines', line=dict(width=0),
+            fill='tonexty', fillcolor=COLORS['bollinger'],
+            name=f'Bollinger Bands ({sma_window}d SMA)',
+            legendgroup='bollinger',
+            hoverinfo='skip'
+        ))
+
+    # ========== ORIGINAL PERIOD LINE ==========
+    customdata_original = list(zip(df_original['hover_date'], df_original['hover_price']))
+    fig.add_trace(go.Scatter(
+        x=df_original['day_index'],
+        y=df_original['cumulative_pct_change'],
+        mode='lines',
+        name=f'Trump Term 1 ({original_start[:4]}–{original_end[:4]})',
+        line=dict(color=COLORS['original_period'], width=2.5),
+        customdata=customdata_original,
+        hovertemplate=(
+            '<b>Trump Term 1</b><br>'
+            'Aligned Day: %{x}<br>'
+            'Date: %{customdata[0]}<br>'
+            'Price: $%{customdata[1]:.2f}<br>'
+            'Cum. Return: %{y:.2%}'
+            '<extra></extra>'
+        ),
+        legendgroup='original'
+    ))
+
+    # ========== REGRESSION LINES ==========
     if 'regression_line' in df_original.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=df_original['day_index'],
-                y=df_original['regression_line'],
-                mode='lines',
-                name='Regression Line (Original)',
-                line=dict(color='black'),
-                hoverinfo='skip',  # Disable hover
-            )
-        )
-
-        # Plot filled regression bands for original data
-        if plot_bands and 'regression_upper_band_1' in df_original.columns:
-            max_stddev = 4  # Changed to 4
-            # Ensure colors list has 4 colors
-            colors = [
-                'rgba(255, 165, 0, 0.15)',  # Orange, alpha=0.15
-                'rgba(255, 165, 0, 0.1)',   # Orange, alpha=0.1
-                'rgba(255, 165, 0, 0.07)',  # Orange, alpha=0.07
-                'rgba(255, 165, 0, 0.04)'   # Orange, alpha=0.04
-            ]
-
-            # Upper bands for original data
-            for i in range(max_stddev, 0, -1):
-                upper_band = df_original[f'regression_upper_band_{i}']
-                lower_band = df_original[f'regression_upper_band_{i - 1}'] if i > 1 else df_original['regression_line']
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_original['day_index'],
-                        y=upper_band,
-                        mode='lines',
-                        line=dict(width=0),
-                        showlegend=False,
-                        hoverinfo='skip'  # Disable hover
-                    )
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_original['day_index'],
-                        y=lower_band,
-                        mode='lines',
-                        line=dict(width=0),
-                        fill='tonexty',
-                        fillcolor=colors[max_stddev - i],
-                        name=f'+{i}σ Regression Band' if i == 1 else None,
-                        hoverinfo='skip',  # Disable hover
-                        showlegend=i == 1
-                    )
-                )
-
-            # Lower bands for original data
-            for i in range(max_stddev, 0, -1):
-                lower_band = df_original[f'regression_lower_band_{i}']
-                upper_band = df_original[f'regression_lower_band_{i - 1}'] if i > 1 else df_original['regression_line']
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_original['day_index'],
-                        y=lower_band,
-                        mode='lines',
-                        line=dict(width=0),
-                        showlegend=False,
-                        hoverinfo='skip'  # Disable hover
-                    )
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_original['day_index'],
-                        y=upper_band,
-                        mode='lines',
-                        line=dict(width=0),
-                        fill='tonexty',
-                        fillcolor=colors[max_stddev - i],
-                        name=f'-{i}σ Regression Band' if i == 1 else None,
-                        hoverinfo='skip',  # Disable hover
-                        showlegend=i == 1
-                    )
-                )
-
-    # Regression line and bands on df_original_truncated
-    if 'regression_line' in df_original_truncated.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=df_original_truncated['day_index'],
-                y=df_original_truncated['regression_line'],
-                mode='lines',
-                name='Regression Line (Truncated)',
-                line=dict(color='green', dash='dash'),
-                hoverinfo='skip',  # Disable hover
-            )
-        )
-
-        # Plot regression bands for truncated data
-        if plot_bands and 'regression_upper_band_1' in df_original_truncated.columns:
-            max_stddev = 4  # Changed to 4
-            # Ensure colors list has 4 colors
-            colors = [
-                'rgba(0, 128, 0, 0.15)',  # Green, alpha=0.15
-                'rgba(0, 128, 0, 0.1)',   # Green, alpha=0.1
-                'rgba(0, 128, 0, 0.07)',  # Green, alpha=0.07
-                'rgba(0, 128, 0, 0.04)'   # Green, alpha=0.04
-            ]
-
-            # Upper bands for truncated data
-            for i in range(max_stddev, 0, -1):
-                upper_band = df_original_truncated[f'regression_upper_band_{i}']
-                lower_band = df_original_truncated[f'regression_upper_band_{i - 1}'] if i > 1 else df_original_truncated['regression_line']
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_original_truncated['day_index'],
-                        y=upper_band,
-                        mode='lines',
-                        line=dict(width=0),
-                        showlegend=False,
-                        hoverinfo='skip'  # Disable hover
-                    )
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_original_truncated['day_index'],
-                        y=lower_band,
-                        mode='lines',
-                        line=dict(width=0),
-                        fill='tonexty',
-                        fillcolor=colors[max_stddev - i],
-                        name=f'+{i}σ Regression Band (Truncated)' if i == 1 else None,
-                        hoverinfo='skip',  # Disable hover
-                        showlegend=i == 1
-                    )
-                )
-
-            # Lower bands for truncated data
-            for i in range(max_stddev, 0, -1):
-                lower_band = df_original_truncated[f'regression_lower_band_{i}']
-                upper_band = df_original_truncated[f'regression_lower_band_{i - 1}'] if i > 1 else df_original_truncated['regression_line']
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_original_truncated['day_index'],
-                        y=lower_band,
-                        mode='lines',
-                        line=dict(width=0),
-                        showlegend=False,
-                        hoverinfo='skip'  # Disable hover
-                    )
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_original_truncated['day_index'],
-                        y=upper_band,
-                        mode='lines',
-                        line=dict(width=0),
-                        fill='tonexty',
-                        fillcolor=colors[max_stddev - i],
-                        name=f'-{i}σ Regression Band (Truncated)' if i == 1 else None,
-                        hoverinfo='skip',  # Disable hover
-                        showlegend=i == 1
-                    )
-                )
-
-    # Plot cumulative percent change of the new period
-    fig.add_trace(
-        go.Scatter(
-            x=df_new['day_index'],
-            y=df_new['cumulative_pct_change'],
+        fig.add_trace(go.Scatter(
+            x=df_original['day_index'],
+            y=df_original['regression_line'],
             mode='lines',
-            name='New Period',
-            hoverinfo='skip',  # Disable hover for this trace
-            line=dict(color='red')
-        )
+            name='Regression (Full Period)',
+            line=dict(color=COLORS['regression_full'], width=1.5, dash='dot'),
+            hovertemplate='Regression (Full): %{y:.2%}<extra></extra>',
+            legendgroup='regression_full'
+        ))
+
+    if 'regression_line' in df_original_truncated.columns:
+        fig.add_trace(go.Scatter(
+            x=df_original_truncated['day_index'],
+            y=df_original_truncated['regression_line'],
+            mode='lines',
+            name='Regression (Matched Days)',
+            line=dict(color=COLORS['regression_truncated'], width=2, dash='dash'),
+            hovertemplate='Regression (Matched): %{y:.2%}<extra></extra>',
+            legendgroup='regression_truncated'
+        ))
+
+    # ========== NEW PERIOD LINE (Primary Focus) ==========
+    customdata_new = list(zip(df_new['hover_date'], df_new['hover_price']))
+    fig.add_trace(go.Scatter(
+        x=df_new['day_index'],
+        y=df_new['cumulative_pct_change'],
+        mode='lines',
+        name=f'Trump Term 2 ({new_start[:4]}–Present)',
+        line=dict(color=COLORS['new_period'], width=3),
+        customdata=customdata_new,
+        hovertemplate=(
+            '<b>Trump Term 2 (Current)</b><br>'
+            'Aligned Day: %{x}<br>'
+            'Date: %{customdata[0]}<br>'
+            'Price: $%{customdata[1]:.2f}<br>'
+            'Cum. Return: %{y:.2%}'
+            '<extra></extra>'
+        ),
+        legendgroup='new'
+    ))
+
+    # ========== LATEST POINT MARKER ==========
+    band_label = f"{'+' if current_band > 0 else ''}{current_band}σ" if current_band is not None else "N/A"
+    fig.add_trace(go.Scatter(
+        x=[df_new['day_index'].iloc[-1]],
+        y=[latest_cum_pct],
+        mode='markers',
+        name='Latest Value',
+        marker=dict(
+            color=COLORS['latest_marker'],
+            size=14,
+            symbol='star',
+            line=dict(color='#2c3e50', width=1.5)
+        ),
+        hovertemplate=(
+            f'<b>LATEST</b><br>'
+            f'Date: {latest_date_short}<br>'
+            f'Price: ${latest_price:.2f}<br>'
+            f'Cum. Return: {latest_cum_pct:.2%}<br>'
+            f'Band: {band_label}'
+            '<extra></extra>'
+        ),
+        showlegend=True
+    ))
+
+    # ========== VERTICAL LINE FOR TODAY ==========
+    fig.add_vline(
+        x=df_new['day_index'].iloc[-1],
+        line=dict(color='rgba(44, 62, 80, 0.5)', width=1, dash='dot'),
+        annotation_text=f"Today: {latest_date_short}",
+        annotation_position="top",
+        annotation_font=dict(size=10, color=COLORS['text'])
     )
 
-    # Add a separate trace for the latest price with hover info
-    fig.add_trace(
-        go.Scatter(
-            x=[df_new['day_index'].iloc[-1]],
-            y=[df_new['cumulative_pct_change'].iloc[-1]],
-            mode='markers',
-            name='Latest Price',
-            hovertemplate=(
-                f"<b>Date</b>: {latest_datetime}<br>"
-                f"<b>Latest Price</b>: ${latest_price:.2f}"
-            ),
-            marker=dict(color='gold', size=10, symbol='star'),
-            showlegend=False
-        )
+    # ========== END-OF-LINE ANNOTATIONS ==========
+    # New Period label
+    fig.add_annotation(
+        x=df_new['day_index'].iloc[-1],
+        y=latest_cum_pct,
+        text=f"  {latest_cum_pct:.1%}",
+        showarrow=False,
+        xanchor='left',
+        font=dict(size=11, color=COLORS['new_period'], family='Arial Black'),
+        bgcolor='rgba(255,255,255,0.8)'
     )
 
-    # Update the layout with the new title and disable default hover modes
+    # Original Period label (at truncated length for comparison)
+    if len(df_original) > len(df_new):
+        orig_at_new_len = df_original.iloc[len(df_new)-1]['cumulative_pct_change']
+        fig.add_annotation(
+            x=df_new['day_index'].iloc[-1],
+            y=orig_at_new_len,
+            text=f"  {orig_at_new_len:.1%}",
+            showarrow=False,
+            xanchor='left',
+            font=dict(size=10, color=COLORS['original_period']),
+            bgcolor='rgba(255,255,255,0.8)'
+        )
+
+    # Regression line label
+    if 'regression_line' in df_original_truncated.columns:
+        reg_val = df_original_truncated['regression_line'].iloc[-1]
+        fig.add_annotation(
+            x=df_original_truncated['day_index'].iloc[-1],
+            y=reg_val,
+            text=f"  Trend: {reg_val:.1%}",
+            showarrow=False,
+            xanchor='left',
+            font=dict(size=9, color=COLORS['regression_truncated']),
+            bgcolor='rgba(255,255,255,0.8)'
+        )
+
+    # ========== DUAL X-AXIS: Aligned Days + Actual Dates ==========
+    # Create tick positions at key intervals (0%, 25%, 50%, 75%, 100%)
+    num_days = len(df_new)
+    tick_positions = [0, num_days//4, num_days//2, 3*num_days//4, num_days-1]
+    tick_positions = [p for p in tick_positions if p < len(df_new)]
+
+    # Get actual dates for the new period at these positions
+    new_period_dates = [df_new.iloc[p]['hover_date'] for p in tick_positions]
+
+    # ========== LAYOUT ==========
     fig.update_layout(
-        title=f"Cumulative Percent Change, Bollinger Bands, and Regression Bands for {symbol} | Date/Time: {latest_datetime} | Latest Price: ${latest_price:.2f}",
-        xaxis_title="Aligned Days",
-        yaxis_title="Cumulative % Change",
-        template='simple_white',
-        legend=dict(x=0, y=1),
-        hovermode='closest',  # Ensures hover interactions are handled correctly
+        title=dict(
+            text=f"<b>{symbol}</b> | Cumulative Return Comparison vs Historical Regression Bands",
+            font=dict(size=18, color=COLORS['text'], family='Arial'),
+            x=0.5,
+            xanchor='center'
+        ),
+        # Subtitle with key info
+        annotations=[
+            dict(
+                text=(f"<b>Latest:</b> ${latest_price:.2f} ({latest_cum_pct:+.2%}) on {latest_date_short} | "
+                      f"<b>Band:</b> {band_label} | "
+                      f"<b>Source:</b> {source.upper()}"),
+                xref='paper', yref='paper',
+                x=0.5, y=1.06,
+                showarrow=False,
+                font=dict(size=12, color=COLORS['text']),
+                xanchor='center'
+            )
+        ] + list(fig.layout.annotations),  # Keep existing annotations
         xaxis=dict(
+            title=dict(
+                text='Aligned Trading Days',
+                font=dict(size=12, color=COLORS['text'])
+            ),
+            showgrid=True,
+            gridcolor=COLORS['grid'],
+            showline=True,
+            linecolor=COLORS['text'],
             showspikes=True,
             spikemode='across',
-            spikesnap='cursor',
-            showline=True,
             spikethickness=1,
-            spikecolor="grey",
-            spikedash='solid',
+            spikecolor='#7f8c8d',
+            range=[0, num_days + num_days * 0.08],  # Add padding for labels
+        ),
+        xaxis2=dict(
+            title=dict(
+                text='Actual Dates (Trump Term 2)',
+                font=dict(size=11, color=COLORS['new_period'])
+            ),
+            overlaying='x',
+            side='bottom',
+            position=0,
+            tickmode='array',
+            tickvals=tick_positions,
+            ticktext=new_period_dates,
+            tickfont=dict(size=10, color=COLORS['new_period']),
+            showgrid=False,
+            anchor='free',
         ),
         yaxis=dict(
-            showspikes=True,
-            spikemode='across',
-            spikesnap='cursor',
+            title=dict(
+                text='Cumulative % Change',
+                font=dict(size=12, color=COLORS['text'])
+            ),
+            tickformat='.1%',
+            showgrid=True,
+            gridcolor=COLORS['grid'],
             showline=True,
-            spikethickness=1,
-            spikecolor="grey",
-            spikedash='solid',
-        )
+            linecolor=COLORS['text'],
+            zeroline=True,
+            zerolinecolor='#bdc3c7',
+            zerolinewidth=1,
+        ),
+        legend=dict(
+            title=dict(text='Series', font=dict(size=11)),
+            orientation='v',
+            yanchor='top',
+            y=0.99,
+            xanchor='right',
+            x=0.99,
+            bgcolor='rgba(255, 255, 255, 0.9)',
+            bordercolor=COLORS['grid'],
+            borderwidth=1,
+            font=dict(size=10)
+        ),
+        hovermode='x unified',
+        hoverlabel=dict(
+            bgcolor='#f8f9fa',
+            font=dict(color=COLORS['text'], size=11),
+            bordercolor='#dee2e6'
+        ),
+        template='plotly_white',
+        font=dict(family='Arial, sans-serif', size=12, color=COLORS['text']),
+        margin=dict(l=60, r=120, t=100, b=80),
+        plot_bgcolor='#ffffff',
+        paper_bgcolor='#fafafa',
     )
 
-    # Calculate dynamic y-axis range with a buffer
-    if 'regression_upper_band_1' in df_original_truncated.columns and 'regression_lower_band_1' in df_original_truncated.columns:
-        max_y = max(df_new['cumulative_pct_change'].max(), df_original_truncated['regression_upper_band_1'].max())
-        min_y = min(df_new['cumulative_pct_change'].min(), df_original_truncated['regression_lower_band_1'].min())
+    # ========== CALCULATE Y-AXIS RANGE ==========
+    if 'regression_upper_band_2' in df_original_truncated.columns:
+        max_y = max(df_new['cumulative_pct_change'].max(),
+                   df_original_truncated['regression_upper_band_2'].max())
+        min_y = min(df_new['cumulative_pct_change'].min(),
+                   df_original_truncated['regression_lower_band_2'].min())
     else:
         max_y = df_new['cumulative_pct_change'].max()
         min_y = df_new['cumulative_pct_change'].min()
 
-    # Add a buffer (20% of the y-range)
     y_range = max_y - min_y
-    buffer = y_range * 0.2
-    max_y += buffer
-    min_y -= buffer
+    buffer = y_range * 0.15
+    fig.update_yaxes(range=[min_y - buffer, max_y + buffer])
 
-    # Apply y-axis range and update title for zoomed-in plot
-    fig.update_layout(
-        yaxis=dict(range=[min_y, max_y]),
-        title=f"Cumulative Percent Change for {symbol} | Date/Time: {latest_datetime} | Latest Price: ${latest_price:.2f}",
-        xaxis=dict(
-            range=[df_new['day_index'].min(), df_new['day_index'].max()],
-        ),
-    )
-
-    # Save the zoomed-in plot as JPEG
+    # ========== SAVE JPEG ==========
     zoomed_file_jpeg = output_dir / f"{symbol}_zoomed_{source}.jpeg"
     try:
-        fig.write_image(str(zoomed_file_jpeg), format='jpeg', width=1600, height=1000)
+        fig.write_image(str(zoomed_file_jpeg), format='jpeg', width=1600, height=900, scale=2)
         logging.info(f"Zoomed-in plot saved as JPEG to {zoomed_file_jpeg}")
     except Exception as e:
         logging.error(f"Failed to save zoomed-in plot as JPEG: {e}")
 
-    # Save the plot as an HTML file
+    # ========== BUILD HTML WITH CONTEXT HEADER ==========
+    html_header = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{symbol} Regression Band Analysis</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a2332 0%, #2d3748 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }}
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+        }}
+        .header {{
+            text-align: center;
+            padding: 30px 20px;
+            color: white;
+        }}
+        .header h1 {{
+            font-size: 28px;
+            font-weight: 300;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }}
+        .header .gold {{ color: #d4af37; }}
+        .header .subtitle {{
+            font-size: 14px;
+            color: #a0aec0;
+        }}
+        .card {{
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }}
+        .info-bar {{
+            background: linear-gradient(90deg, #f7fafc 0%, #edf2f7 100%);
+            padding: 20px 24px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            align-items: center;
+        }}
+        .info-item {{
+            display: flex;
+            flex-direction: column;
+        }}
+        .info-label {{
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #718096;
+            margin-bottom: 4px;
+        }}
+        .info-value {{
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+        }}
+        .info-value.price {{ color: #1a2332; }}
+        .info-value.positive {{ color: #2d6a4f; }}
+        .info-value.negative {{ color: #9b2c2c; }}
+        .chart-container {{
+            padding: 0;
+        }}
+        .legend-guide {{
+            padding: 20px 24px;
+            background: #f7fafc;
+            border-top: 1px solid #e2e8f0;
+        }}
+        .legend-guide h3 {{
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #718096;
+            margin-bottom: 12px;
+        }}
+        .legend-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+        }}
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: #4a5568;
+        }}
+        .legend-color {{
+            width: 24px;
+            height: 4px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }}
+        .legend-color.navy {{ background: #1e3a5f; }}
+        .legend-color.red {{ background: #c0392b; width: 24px; height: 5px; }}
+        .legend-color.green-dash {{ background: repeating-linear-gradient(90deg, #27ae60 0px, #27ae60 6px, transparent 6px, transparent 10px); }}
+        .legend-color.amber {{ background: rgba(212, 175, 55, 0.4); height: 12px; }}
+        .legend-color.green-band {{ background: rgba(39, 174, 96, 0.3); height: 12px; }}
+        .legend-color.gold-star {{ background: #f1c40f; width: 12px; height: 12px; border-radius: 50%; }}
+        .methodology {{
+            padding: 20px 24px;
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
+        }}
+        .methodology h3 {{
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #d4af37;
+            margin-bottom: 10px;
+        }}
+        .methodology p {{
+            font-size: 13px;
+            line-height: 1.7;
+            color: #4a5568;
+            margin-bottom: 10px;
+        }}
+        .methodology ul {{
+            font-size: 13px;
+            color: #4a5568;
+            margin-left: 20px;
+            line-height: 1.8;
+        }}
+        .footer {{
+            text-align: center;
+            padding: 20px;
+            color: #718096;
+            font-size: 12px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><span class="gold">{symbol}</span> Regression Band Analysis</h1>
+            <p class="subtitle">Comparing Trump Term 2 Performance vs Trump Term 1 Historical Pattern</p>
+        </div>
+
+        <div class="card">
+            <div class="info-bar">
+                <div class="info-item">
+                    <span class="info-label">Latest Price</span>
+                    <span class="info-value price">${latest_price:.2f}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Cumulative Return</span>
+                    <span class="info-value {'positive' if latest_cum_pct >= 0 else 'negative'}">{latest_cum_pct:+.2%}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Current Band</span>
+                    <span class="info-value">{band_label}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Trading Days</span>
+                    <span class="info-value">{num_days}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">As Of</span>
+                    <span class="info-value">{latest_date_short}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Data Source</span>
+                    <span class="info-value">{source.upper()}</span>
+                </div>
+            </div>
+
+            <div class="chart-container">
+'''
+
+    html_footer = f'''
+            </div>
+
+            <div class="legend-guide">
+                <h3>Chart Legend</h3>
+                <div class="legend-grid">
+                    <div class="legend-item">
+                        <div class="legend-color red"></div>
+                        <span><strong>Trump Term 2 (Current)</strong> — {new_start} to present</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color navy"></div>
+                        <span><strong>Trump Term 1 (Reference)</strong> — {original_start} to {original_end}</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color green-dash"></div>
+                        <span><strong>Regression Line</strong> — Expected trend based on matched days</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color green-band"></div>
+                        <span><strong>Green Bands (±1σ to ±4σ)</strong> — Active comparison zone</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color amber"></div>
+                        <span><strong>Amber Bands</strong> — Full historical period σ bands</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color gold-star"></div>
+                        <span><strong>Gold Star</strong> — Latest data point</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="methodology">
+                <h3>Methodology</h3>
+                <p>
+                    This chart compares the <strong>cumulative daily returns</strong> of {symbol} during two presidential terms,
+                    aligned by trading day count from the election date. A linear regression is fitted to the reference period
+                    to establish the historical trend, with standard deviation bands (±1σ to ±4σ) showing zones of normal vs. abnormal deviation.
+                </p>
+                <p><strong>How to read the chart:</strong></p>
+                <ul>
+                    <li><strong>Above the regression line</strong> = outperforming the historical pattern</li>
+                    <li><strong>Below the regression line</strong> = underperforming the historical pattern</li>
+                    <li><strong>Within ±1σ</strong> = typical variation (~68% of observations)</li>
+                    <li><strong>Beyond ±2σ</strong> = unusual deviation (~5% probability)</li>
+                    <li><strong>Beyond ±3σ</strong> = extreme deviation (&lt;1% probability)</li>
+                </ul>
+            </div>
+
+            <div class="methodology">
+                <h3>Interactive Features</h3>
+                <ul>
+                    <li><strong>Hover</strong> — See exact date, price, and cumulative return for any point</li>
+                    <li><strong>Click legend items</strong> — Toggle series visibility on/off</li>
+                    <li><strong>Drag to zoom</strong> — Select an area to zoom in</li>
+                    <li><strong>Double-click</strong> — Reset zoom to full view</li>
+                    <li><strong>Toolbar (top-right)</strong> — Download as PNG, pan, zoom, autoscale</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            Compare Timeframes Analysis System · Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}
+            <br>This is a descriptive analytical tool, not investment advice or a trading signal.
+        </div>
+    </div>
+</body>
+</html>
+'''
+
+    # Generate Plotly HTML (just the chart div)
+    chart_html = fig.to_html(
+        full_html=False,
+        include_plotlyjs='cdn',
+        config={
+            'displayModeBar': True,
+            'displaylogo': False,
+            'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+            'toImageButtonOptions': {
+                'format': 'png',
+                'filename': f'{symbol}_regression_analysis',
+                'height': 900,
+                'width': 1600,
+                'scale': 2
+            }
+        }
+    )
+
+    # Combine header + chart + footer
+    full_html = html_header + chart_html + html_footer
+
+    # Save the HTML file
     html_file = output_dir / f"{symbol}_{source}.html"
     try:
-        fig.write_html(str(html_file))
-        logging.info(f"Plot saved as HTML to {html_file}")
+        with open(html_file, 'w', encoding='utf-8') as f:
+            f.write(full_html)
+        logging.info(f"Interactive HTML saved to {html_file}")
     except Exception as e:
-        logging.error(f"Failed to save plot as HTML: {e}")
+        logging.error(f"Failed to save HTML: {e}")
 
-    return zoomed_file_jpeg, html_file  # Return both paths
+    return zoomed_file_jpeg, html_file
 
 def get_regression_band(current_pct, df_truncated):
     """
@@ -624,7 +1000,8 @@ def main_loop(symbol, source, original_start, original_end, new_start, new_end, 
             output_dir = Path('./plots')
             output_dir.mkdir(parents=True, exist_ok=True)
             jpeg_path, html_path = plot_comparison(symbol, df_original, df_original_truncated, df_new, output_dir,
-                                                   sma_window, source, plot_bands, plot_bollinger_bands)
+                                                   sma_window, source, plot_bands, plot_bollinger_bands,
+                                                   original_start, original_end, new_start)
 
             if html_output_path and html_path:
                 # Copy or move the HTML file to the desired output path
