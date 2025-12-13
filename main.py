@@ -688,7 +688,13 @@ def main_loop(symbol, source, original_start, original_end, new_start, new_end, 
                         # To enable: set html_output_path to a publicly accessible URL
                         # e.g., "https://yourdomain.com/charts/VOO_alpaca.html"
 
-                        # Build professional HTML email content
+                        # Format period dates for display
+                        from datetime import datetime as dt
+                        orig_start_dt = dt.strptime(original_start, '%Y-%m-%d')
+                        orig_end_dt = dt.strptime(original_end, '%Y-%m-%d')
+                        new_start_dt = dt.strptime(new_start, '%Y-%m-%d')
+
+                        # Build professional HTML email content with period context
                         html_body, text_body = build_email_content(
                             symbol=symbol,
                             source=source,
@@ -703,6 +709,12 @@ def main_loop(symbol, source, original_start, original_end, new_start, new_end, 
                             days_new=days_new,
                             sma_window=sma_window,
                             check_frequency=check_frequency,
+                            # Period context for methodology explanation
+                            reference_period_name="Trump First Term",
+                            reference_start=orig_start_dt.strftime('%b %Y'),
+                            reference_end=orig_end_dt.strftime('%b %Y'),
+                            current_period_name="Trump Second Term",
+                            current_start=new_start_dt.strftime('%b %Y'),
                             html_link=html_link
                         )
 
