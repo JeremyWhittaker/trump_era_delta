@@ -682,11 +682,11 @@ def main_loop(symbol, source, original_start, original_end, new_start, new_end, 
                         days_original = len(df_original)
                         days_new = len(df_new)
 
-                        # Build HTML link if available
+                        # HTML link - only include if it's a real URL (not a local path)
+                        # Local file paths won't work for email recipients
                         html_link = None
-                        if html_output_path:
-                            # Convert to absolute path for potential hosting
-                            html_link = str(Path(html_output_path).absolute())
+                        # To enable: set html_output_path to a publicly accessible URL
+                        # e.g., "https://yourdomain.com/charts/VOO_alpaca.html"
 
                         # Build professional HTML email content
                         html_body, text_body = build_email_content(

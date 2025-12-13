@@ -2,8 +2,26 @@
 Professional HTML email template builder for Compare Timeframes alerts.
 Styled after the AAII dashboard design with inline CSS for email compatibility.
 """
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
+
+
+def hex_to_rgba(hex_color: str, alpha: float = 1.0) -> str:
+    """
+    Convert a hex color to rgba() format for email client compatibility.
+    Many email clients (especially Outlook) don't support 8-digit hex colors.
+
+    Args:
+        hex_color: Hex color string like "#27ae60"
+        alpha: Opacity value between 0.0 and 1.0
+
+    Returns:
+        rgba() string like "rgba(39, 174, 96, 0.12)"
+    """
+    hex_color = hex_color.lstrip('#')
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return f"rgba({r}, {g}, {b}, {alpha})"
 
 
 def get_band_color(band: int) -> Tuple[str, str]:
@@ -65,7 +83,7 @@ def build_band_ladder_html(bands: Dict[str, float], current_pct: float, current_
         row_style = ""
         if is_current:
             bg_color, _ = get_band_color(current_band)
-            row_style = f'background-color: {bg_color}20;'  # 20 is ~12% opacity in hex
+            row_style = f'background-color: {hex_to_rgba(bg_color, 0.12)};'
 
         rows.append(f'''
             <tr style="{row_style}">
@@ -79,8 +97,9 @@ def build_band_ladder_html(bands: Dict[str, float], current_pct: float, current_
             next_label = band_order[i + 1]
             next_value = bands.get(next_label, 0)
             if value >= current_pct > next_value:
+                current_row_bg = hex_to_rgba("#3498db", 0.12)
                 rows.append(f'''
-                    <tr style="background-color: #3498db20;">
+                    <tr style="background-color: {current_row_bg};">
                         <td style="padding: 8px 12px; border-bottom: 1px solid #ecf0f1; font-weight: 700; color: #3498db;">Current</td>
                         <td style="padding: 8px 12px; border-bottom: 1px solid #ecf0f1; text-align: right; font-family: monospace; font-weight: 700; color: #3498db;">{current_pct:.4f}</td>
                     </tr>
@@ -88,17 +107,18 @@ def build_band_ladder_html(bands: Dict[str, float], current_pct: float, current_
                 current_inserted = True
 
     # Handle edge case where current is above +4σ or below -4σ
+    current_row_bg = hex_to_rgba("#3498db", 0.12)
     if not current_inserted:
         if current_pct > bands.get('+4σ', 0):
             rows.insert(0, f'''
-                <tr style="background-color: #3498db20;">
+                <tr style="background-color: {current_row_bg};">
                     <td style="padding: 8px 12px; border-bottom: 1px solid #ecf0f1; font-weight: 700; color: #3498db;">Current</td>
                     <td style="padding: 8px 12px; border-bottom: 1px solid #ecf0f1; text-align: right; font-family: monospace; font-weight: 700; color: #3498db;">{current_pct:.4f}</td>
                 </tr>
             ''')
         else:
             rows.append(f'''
-                <tr style="background-color: #3498db20;">
+                <tr style="background-color: {current_row_bg};">
                     <td style="padding: 8px 12px; border-bottom: 1px solid #ecf0f1; font-weight: 700; color: #3498db;">Current</td>
                     <td style="padding: 8px 12px; border-bottom: 1px solid #ecf0f1; text-align: right; font-family: monospace; font-weight: 700; color: #3498db;">{current_pct:.4f}</td>
                 </tr>

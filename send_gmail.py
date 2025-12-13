@@ -168,6 +168,9 @@ def send_email(to_addrs, subject, body, is_html=False, attachments=None,
 def main():
     if "--help" in sys.argv or "-h" in sys.argv:
         print(__doc__)
+        print("\nAdditional options:")
+        print("  --html-body FILE    Read HTML body from file (enables new multipart mode)")
+        print("  --text-body FILE    Read plain text fallback from file")
         sys.exit(0)
 
     # Parse arguments
@@ -176,6 +179,8 @@ def main():
     body = None
     is_html = False
     attachments = []
+    html_body = None
+    text_body = None
 
     i = 1
     while i < len(sys.argv):
@@ -190,6 +195,24 @@ def main():
             i += 2
         elif arg == "--body" and i + 1 < len(sys.argv):
             body = sys.argv[i + 1]
+            i += 2
+        elif arg == "--html-body" and i + 1 < len(sys.argv):
+            # Read HTML body from file
+            html_file = Path(sys.argv[i + 1])
+            if html_file.exists():
+                html_body = html_file.read_text()
+            else:
+                print(f"Error: HTML body file not found: {sys.argv[i + 1]}")
+                sys.exit(1)
+            i += 2
+        elif arg == "--text-body" and i + 1 < len(sys.argv):
+            # Read text body from file
+            text_file = Path(sys.argv[i + 1])
+            if text_file.exists():
+                text_body = text_file.read_text()
+            else:
+                print(f"Error: Text body file not found: {sys.argv[i + 1]}")
+                sys.exit(1)
             i += 2
         elif arg == "--html":
             is_html = True
@@ -207,11 +230,17 @@ def main():
     if not subject:
         print("Error: --subject is required")
         sys.exit(1)
-    if body is None:
-        print("Error: --body is required")
+    # Allow either --body or --html-body
+    if body is None and html_body is None:
+        print("Error: --body or --html-body is required")
         sys.exit(1)
 
-    success, message = send_email(to_addrs, subject, body, is_html, attachments if attachments else None)
+    success, message = send_email(
+        to_addrs, subject, body, is_html,
+        attachments if attachments else None,
+        html_body=html_body,
+        text_body=text_body
+    )
     print(message)
     sys.exit(0 if success else 1)
 
