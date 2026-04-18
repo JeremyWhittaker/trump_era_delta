@@ -1,0 +1,4 @@
+# Deprecated: recipients no longer live in this file.
+# Configure alert recipients in config/service.local.json under alerts.recipients.
+# Verify the config with: python3 main.py check
+# Send a one-shot test email with: python3 main.py test-email
