@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-04-17)
 
 Phase: 1 of 5 (Configuration Foundation)
 Plan: 0 of 3 in current phase
-Status: Ready to plan
-Last activity: 2026-04-17 - Phase 1 context gathered and ready for planning
+Status: Ready to execute
+Last activity: 2026-04-17 -- Phase 1 planning complete
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -45,6 +45,9 @@ Recent decisions affecting current work:
 - [Phase 0]: Refactor toward a headless local service before considering any UI work
 - [Phase 0]: Keep non-secret config in the project and keep credentials machine-local
 - [Phase 0]: Treat receipt of a test alert email as the operational acceptance check
+- [Phase 1]: Use committed `config/service.json` plus gitignored `config/service.local.json` for non-secret service settings
+- [Phase 1]: Prefer project-local `.env.local` for Gmail secrets, with temporary fallback to `~/.gmail_send/.env`
+- [Phase 1]: Standardize operator entrypoints around `main.py check`, `run`, `test-email`, and `show-config`
 
 ### Pending Todos
 
@@ -65,6 +68,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-17 17:02 MST
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-configuration-foundation/01-CONTEXT.md
+Last session: 2026-04-17 19:19 MST
+Stopped at: Phase 1 planning complete
+Resume file: .planning/phases/01-configuration-foundation/01-01-PLAN.md
