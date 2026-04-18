@@ -29,10 +29,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The startup command validates missing config, missing secrets, and invalid paths before entering the monitoring loop.
   3. Recipients and alert-related settings are read from configuration instead of hard-coded defaults or stale scripts.
   4. Operator can run a no-send validation command to confirm configuration before enabling live emails.
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
-- [ ] 01-01: Design the project-local config layout, secret loading rules, and runtime directory contract
+- [x] 01-01: Design the project-local config layout, secret loading rules, and runtime directory contract
 - [ ] 01-02: Implement a validated bootstrap/CLI entrypoint that loads config and performs preflight checks
 - [ ] 01-03: Migrate recipient handling and alert-related settings into the new configuration flow
 
@@ -104,7 +104,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Configuration Foundation | 0/3 | Not started | - |
+| 1. Configuration Foundation | 1/3 | In Progress |   |
 | 2. Shared Analysis Core | 0/3 | Not started | - |
 | 3. Alert Reliability | 0/3 | Not started | - |
 | 4. Local Service Operations | 0/3 | Not started | - |
