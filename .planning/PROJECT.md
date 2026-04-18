@@ -17,14 +17,17 @@ The monitor runs reliably on this machine and delivers trustworthy email alerts 
 - ✓ Generate Plotly HTML and JPEG comparison artifacts for the monitored period — existing
 - ✓ Compose HTML/text alert content and send Gmail-based notification emails — existing
 - ✓ Run the monitor from a CLI entrypoint with configurable symbol, dates, source, and polling interval — existing
+- ✓ Phase 1: Store non-secret runtime settings in committed `config/service.json` with optional local overrides in `config/service.local.json`
+- ✓ Phase 1: Load Gmail secrets from `.env.local` with validation and redacted config inspection
+- ✓ Phase 1: Use one validated CLI surface for `check`, `run`, `test-email`, and `show-config`
+- ✓ Phase 1: Manage alert recipients from config instead of committed source files
 
 ### Active
 
 - [ ] Refactor the script-oriented codebase into a maintainable local background service with a clear operator workflow.
-- [ ] Move non-secret runtime configuration into project-local config files while keeping credentials out of committed source.
-- [ ] Make the alert pipeline operational end to end, including recipient management, test-email verification, and restart-safe live alerting.
+- [ ] Make the alert pipeline operational end to end, including successful test-email delivery and restart-safe live alerting.
 - [ ] Consolidate duplicated analysis, plotting, and email wiring into shared code that powers the monitor and verification paths.
-- [ ] Add operator-safe validation, smoke-check, and documentation paths so the service can be configured and trusted without source edits.
+- [ ] Add smoke-check and operator documentation paths so the service can be configured and trusted without source edits.
 
 ### Out of Scope
 
@@ -35,7 +38,7 @@ The monitor runs reliably on this machine and delivers trustworthy email alerts 
 
 ## Context
 
-The current repository is a brownfield Python codebase with a flat root-level script layout: `main.py` runs the monitor loop, `email_template.py` renders alerts, `send_gmail.py` sends Gmail SMTP mail, `send_test_email.py` is the manual end-to-end check, and `predict_prophet.py` is an experimental forecast script. The codebase map in `.planning/codebase/` shows duplicated analysis logic across entrypoints, a broken `send_test_email.py` path, process-local alert state, unmanaged runtime artifacts, and no automated smoke coverage.
+The current repository is a brownfield Python codebase with a flat root-level script layout: `main.py` runs the monitor loop, `email_template.py` renders alerts, `send_gmail.py` sends Gmail SMTP mail, `send_test_email.py` is now a thin wrapper into the validated CLI, and `predict_prophet.py` is an experimental forecast script. Phase 1 completed the configuration foundation by moving settings into repo-local config files, defining the Gmail secret contract, and consolidating operator entrypoints under `main.py`. The codebase map in `.planning/codebase/` still shows duplicated analysis logic, process-local alert state, unmanaged runtime artifacts, and no automated smoke coverage.
 
 The service depends on a sibling `asset_prices` repository for parquet-backed market data. Gmail delivery currently depends on credentials outside the repo, while recipient addresses and other runtime behavior are partially encoded in root-level files and CLI flags. The user’s success signal for this milestone is concrete: if a configured test alert email arrives, the email side is working.
 
@@ -51,10 +54,14 @@ The service depends on a sibling `asset_prices` repository for parquet-backed ma
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Refactor toward a headless service rather than build a web UI | The user explicitly wants the project running locally as a service, and reliable operations matter more than a dashboard right now | — Pending |
-| Keep configuration centered in project-local files with secrets separated | The user wants config in the repo, but committed secrets would be unsafe | — Pending |
-| Treat receipt of a configured test email as the primary operational acceptance check | The user wants a direct proof that alerts work end to end | — Pending |
-| Focus the milestone on the monitor, alert path, and operator workflow before forecast productionization | The forecast script is experimental and not part of the requested service outcome | — Pending |
+| Refactor toward a headless service rather than build a web UI | The user explicitly wants the project running locally as a service, and reliable operations matter more than a dashboard right now | Locked in Phase 1 roadmap and scope |
+| Keep configuration centered in project-local files with secrets separated | The user wants config in the repo, but committed secrets would be unsafe | Implemented in Phase 1 via `config/service.json`, `config/service.local.json`, and `.env.local` |
+| Treat receipt of a configured test email as the primary operational acceptance check | The user wants a direct proof that alerts work end to end | Still the acceptance rule for alert-reliability work |
+| Focus the milestone on the monitor, alert path, and operator workflow before forecast productionization | The forecast script is experimental and not part of the requested service outcome | Confirmed by the Phase 1-5 roadmap |
+
+## Current State
+
+Phase 1 is complete. The project now has a validated configuration/bootstrap layer, redacted config inspection, strict no-send preflight, and a single CLI surface for live runs and test-email execution. The next priority is extracting the duplicated analysis/report path into shared code before making live alerts restart-safe and packaging the monitor as a managed local service.
 
 ## Evolution
 
@@ -74,4 +81,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-17 after initialization*
+*Last updated: 2026-04-17 after Phase 1 completion*
