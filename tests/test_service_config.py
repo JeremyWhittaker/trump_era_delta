@@ -9,6 +9,36 @@ import service_config
 
 
 class ServiceConfigTests(unittest.TestCase):
+    def _valid_config(self, tmp_path, metadata=None):
+        repo_path = tmp_path / "asset_prices_repo"
+        data_path = repo_path / "data"
+        data_path.mkdir(parents=True, exist_ok=True)
+        return {
+            "asset_prices": {
+                "repo_path": str(repo_path),
+                "data_dir": str(data_path),
+                "data_type": "adjusted",
+            },
+            "monitor": {
+                "symbol": "VOO",
+                "source": "alpaca",
+                "original_start": "2016-11-08",
+                "original_end": "2020-11-03",
+                "new_start": "2024-11-05",
+                "new_end": date.today().isoformat(),
+                "sma_window": 100,
+                "plot_bands": True,
+                "plot_bollinger_bands": False,
+                "check_frequency_minutes": 15,
+            },
+            "alerts": {"enabled": True, "recipients": ["ops@example.com"]},
+            "runtime": {
+                "html_output_path": "./plots/index.html",
+                "log_path": "./runtime/main.log",
+            },
+            "_metadata": metadata or {},
+        }
+
     def test_load_service_config_merges_files_and_env_overrides(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -77,6 +107,31 @@ class ServiceConfigTests(unittest.TestCase):
             self.assertEqual(metadata["config_path"], str(config_path))
             self.assertEqual(metadata["local_config_path"], str(local_config_path))
 
+    def test_load_gmail_secret_config_rejects_blank_project_env_values(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            project_env = tmp_path / ".env.local"
+            legacy_env = tmp_path / "legacy.env"
+            project_env.write_text(
+                "GMAIL_ADDRESS=\n"
+                "GMAIL_APP_PASSWORD=   \n",
+                encoding="utf-8",
+            )
+            legacy_env.write_text(
+                "GMAIL_ADDRESS=legacy@example.com\n"
+                "GMAIL_APP_PASSWORD=legacy-password\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(service_config, "DEFAULT_ENV_FILE", project_env), mock.patch.object(
+                service_config, "LEGACY_GMAIL_ENV_FILE", legacy_env
+            ):
+                config, secret_source, error = service_config.load_gmail_secret_config()
+
+            self.assertIsNone(config)
+            self.assertEqual(secret_source, str(project_env))
+            self.assertIn("non-empty GMAIL_ADDRESS", error)
+
     def test_load_gmail_secret_config_prefers_project_env_local(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -102,6 +157,36 @@ class ServiceConfigTests(unittest.TestCase):
             self.assertEqual(config["email"], "project@example.com")
             self.assertEqual(config["app_password"], "project-password")
             self.assertEqual(secret_source, str(project_env))
+
+    def test_validate_service_config_allows_missing_default_local_override(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = self._valid_config(
+                Path(tmpdir),
+                metadata={
+                    "local_config_exists": False,
+                    "local_config_is_default": True,
+                    "local_config_path": "config/service.local.json",
+                },
+            )
+
+            issues = service_config.validate_service_config(config, gmail_config=None, require_gmail=False)
+
+            self.assertFalse(any("Local override file is missing" in issue for issue in issues))
+
+    def test_validate_service_config_requires_missing_custom_local_override(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = self._valid_config(
+                Path(tmpdir),
+                metadata={
+                    "local_config_exists": False,
+                    "local_config_is_default": False,
+                    "local_config_path": "config/custom.local.json",
+                },
+            )
+
+            issues = service_config.validate_service_config(config, gmail_config=None, require_gmail=False)
+
+            self.assertTrue(any("config/custom.local.json" in issue for issue in issues))
 
     def test_validate_service_config_reports_empty_recipients_and_missing_gmail(self):
         with tempfile.TemporaryDirectory() as tmpdir:

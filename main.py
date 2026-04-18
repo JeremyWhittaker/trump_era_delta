@@ -70,28 +70,19 @@ def _resolve_output_dir(html_output_path):
     return html_output.parent if html_output.parent != Path("") else Path(".")
 
 
+def _check_analysis_dependencies():
+    try:
+        _load_analysis_dependencies()
+    except ModuleNotFoundError as exc:
+        return (
+            "Missing Python dependency for analysis commands: "
+            f"{exc.name}. Install the project requirements before running check, run, or test-email."
+        )
+
+    return None
+
+
 _configure_logging()
-
-# Path to email recipients file
-EMAIL_RECIPIENTS_FILE = Path(__file__).parent / 'email_recipients.txt'
-
-
-def load_email_recipients():
-    """Load email recipients from email_recipients.txt file."""
-    if not EMAIL_RECIPIENTS_FILE.exists():
-        logging.warning(f"Email recipients file not found: {EMAIL_RECIPIENTS_FILE}")
-        return []
-
-    recipients = []
-    with open(EMAIL_RECIPIENTS_FILE, 'r') as f:
-        for line in f:
-            line = line.strip()
-            # Skip empty lines and comments
-            if line and not line.startswith('#'):
-                recipients.append(line)
-
-    logging.info(f"Loaded {len(recipients)} email recipients from {EMAIL_RECIPIENTS_FILE}")
-    return recipients
 
 def load_data(
     symbol,
@@ -1018,6 +1009,64 @@ def get_regression_band(current_pct, df_truncated):
         return -4
 
 
+def _prepare_analysis_frames(
+    df,
+    symbol,
+    original_start,
+    original_end,
+    new_start,
+    adjusted_new_end,
+    sma_window,
+    plot_bollinger_bands,
+):
+    adjusted_new_end_label = (
+        adjusted_new_end.strftime("%Y-%m-%d")
+        if hasattr(adjusted_new_end, "strftime")
+        else str(adjusted_new_end)
+    )
+
+    df_original = calculate_cumulative_pct_change(
+        df,
+        original_start,
+        original_end,
+        sma_window=sma_window,
+        plot_bollinger_bands=plot_bollinger_bands,
+    )
+    df_new = calculate_cumulative_pct_change(df, new_start, adjusted_new_end)
+
+    if df_new.empty:
+        raise ValueError(
+            f"Current period produced no rows for {symbol} between {new_start} and "
+            f"{adjusted_new_end_label}."
+        )
+
+    if len(df_original) < 2:
+        raise ValueError(
+            f"Reference period produced only {len(df_original)} row(s) for {symbol}; "
+            "cannot compute regression bands."
+        )
+
+    df_original = df_original.copy()
+    df_new = df_new.copy()
+    df_original["day_index"] = range(len(df_original))
+    df_new["day_index"] = range(len(df_new))
+    df_original = calculate_regression_bands(df_original)
+
+    num_days_new = len(df_new)
+    df_original_truncated = df_original.iloc[:num_days_new].copy()
+    df_original_truncated.reset_index(drop=True, inplace=True)
+    df_original_truncated["day_index"] = range(len(df_original_truncated))
+
+    if len(df_original_truncated) < 2:
+        raise ValueError(
+            f"Reference period produced only {len(df_original_truncated)} row(s) for {symbol}; "
+            f"cannot compute regression bands for {num_days_new} current-day rows."
+        )
+
+    df_original_truncated = calculate_regression_bands(df_original_truncated)
+    return df_original, df_new, df_original_truncated
+
+
 def send_test_email_now(
     symbol,
     source,
@@ -1062,23 +1111,20 @@ def send_test_email_now(
     today = datetime.now(timezone.utc)
     adjusted_new_end = min(latest_data_date, today)
 
-    df_original = calculate_cumulative_pct_change(df, original_start, original_end, sma_window=sma_window,
-                                                  plot_bollinger_bands=plot_bollinger_bands)
-    df_new = calculate_cumulative_pct_change(df, new_start, adjusted_new_end)
-
-    df_original['day_index'] = range(len(df_original))
-    df_new['day_index'] = range(len(df_new))
-
-    if not df_original.empty:
-        df_original = calculate_regression_bands(df_original)
-
-    num_days_new = len(df_new)
-    df_original_truncated = df_original.iloc[:num_days_new].copy()
-    df_original_truncated.reset_index(drop=True, inplace=True)
-    df_original_truncated['day_index'] = range(len(df_original_truncated))
-
-    if not df_original_truncated.empty:
-        df_original_truncated = calculate_regression_bands(df_original_truncated)
+    try:
+        df_original, df_new, df_original_truncated = _prepare_analysis_frames(
+            df,
+            symbol,
+            original_start,
+            original_end,
+            new_start,
+            adjusted_new_end,
+            sma_window,
+            plot_bollinger_bands,
+        )
+    except ValueError as exc:
+        logging.error(str(exc))
+        return False
 
     # Generate charts
     output_dir = _resolve_output_dir(html_output_path)
@@ -1246,29 +1292,16 @@ def main_loop(
             today = datetime.now(timezone.utc)
             adjusted_new_end = min(latest_data_date, today)
 
-            # Calculate cumulative percent change for original and new periods
-            df_original = calculate_cumulative_pct_change(df, original_start, original_end, sma_window=sma_window,
-                                                          plot_bollinger_bands=plot_bollinger_bands)
-            df_new = calculate_cumulative_pct_change(df, new_start, adjusted_new_end)
-
-            df_original['day_index'] = range(len(df_original))
-            df_new['day_index'] = range(len(df_new))
-
-            # Calculate regression bands
-            if not df_original.empty:
-                df_original = calculate_regression_bands(df_original)
-            else:
-                logging.warning("df_original is empty after filtering.")
-
-            num_days_new = len(df_new)
-            df_original_truncated = df_original.iloc[:num_days_new].copy()
-            df_original_truncated.reset_index(drop=True, inplace=True)
-            df_original_truncated['day_index'] = range(len(df_original_truncated))
-
-            if not df_original_truncated.empty:
-                df_original_truncated = calculate_regression_bands(df_original_truncated)
-            else:
-                logging.warning("df_original_truncated is empty after filtering.")
+            df_original, df_new, df_original_truncated = _prepare_analysis_frames(
+                df,
+                symbol,
+                original_start,
+                original_end,
+                new_start,
+                adjusted_new_end,
+                sma_window,
+                plot_bollinger_bands,
+            )
 
             # Determine the current regression band
             latest_cumulative_pct_change = df_new['cumulative_pct_change'].iloc[-1]
@@ -1408,9 +1441,9 @@ def main_loop(
                             logging.error(f"Failed to send email: {message}")
 
                     previous_band = current_band
-
-
-
+        except ValueError as exc:
+            logging.error(f"Fatal analysis error: {exc}")
+            return False
         except Exception as e:
             logging.error(f"Error during analysis: {e}")
 
@@ -1498,7 +1531,7 @@ def _load_command_context(args, require_gmail=False, force_alert_readiness=False
         }
 
     gmail_config, secret_source, gmail_error = load_gmail_secret_config(env_file=args.env_file)
-    if secret_source:
+    if secret_source and gmail_config and not gmail_error:
         metadata["secret_source"] = secret_source
         config.setdefault("_metadata", {})["secret_source"] = secret_source
 
@@ -1562,6 +1595,10 @@ def main(argv=None):
             require_gmail=True,
             force_alert_readiness=True,
         )
+        dependency_error = _check_analysis_dependencies()
+        if dependency_error and dependency_error not in report["errors"]:
+            report["errors"].append(dependency_error)
+            report["ok"] = False
         print_preflight_report(report, as_json=args.json)
         return 0 if report["ok"] else 1
 
@@ -1599,6 +1636,11 @@ def main(argv=None):
             force_alert_readiness=False,
         )
 
+    dependency_error = _check_analysis_dependencies()
+    if dependency_error and dependency_error not in report["errors"]:
+        report["errors"].append(dependency_error)
+        report["ok"] = False
+
     if not report["ok"]:
         print_preflight_report(report, as_json=args.json)
         return 1
@@ -1614,8 +1656,7 @@ def main(argv=None):
     _configure_logging(runtime_settings["log_path"])
 
     if args.command == "run":
-        main_loop(**runtime_settings)
-        return 0
+        return 0 if main_loop(**runtime_settings) is not False else 1
 
     success = send_test_email_now(
         symbol=runtime_settings["symbol"],

@@ -68,8 +68,14 @@ def _get_legacy_env_path(env):
     return LEGACY_GMAIL_ENV_FILE
 
 
+def _has_nonempty_value(value):
+    return bool(str(value or "").strip())
+
+
 def _has_direct_gmail_env(env):
-    return bool(env.get("GMAIL_ADDRESS")) and bool(env.get("GMAIL_APP_PASSWORD"))
+    return _has_nonempty_value(env.get("GMAIL_ADDRESS")) and _has_nonempty_value(
+        env.get("GMAIL_APP_PASSWORD")
+    )
 
 
 def _parse_date(value, label, issues):
@@ -105,12 +111,15 @@ def load_service_config(config_path=None, local_config_path=None, env=None):
     env = dict(os.environ if env is None else env)
     config_path = _coerce_path(config_path or DEFAULT_CONFIG_PATH)
     local_config_path = _coerce_path(local_config_path or DEFAULT_LOCAL_CONFIG_PATH)
+    default_local_resolved = DEFAULT_LOCAL_CONFIG_PATH.resolve(strict=False)
+    local_config_is_default = local_config_path.resolve(strict=False) == default_local_resolved
 
     metadata = {
         "config_path": str(config_path),
         "local_config_path": str(local_config_path),
         "config_exists": config_path.exists(),
         "local_config_exists": local_config_path.exists(),
+        "local_config_is_default": local_config_is_default,
         "env_overrides": [],
         "secret_source": "environment" if _has_direct_gmail_env(env) else None,
     }
@@ -150,31 +159,30 @@ def load_gmail_secret_config(env_file=None, env=None):
     env = dict(os.environ if env is None else env)
     if _has_direct_gmail_env(env):
         return {
-            "email": env["GMAIL_ADDRESS"],
-            "app_password": env["GMAIL_APP_PASSWORD"],
+            "email": str(env["GMAIL_ADDRESS"]).strip(),
+            "app_password": str(env["GMAIL_APP_PASSWORD"]).strip(),
         }, "environment", None
 
     legacy_path = _get_legacy_env_path(env)
     sources = [_coerce_path(env_file)] if env_file else [DEFAULT_ENV_FILE, legacy_path]
 
-    for index, source in enumerate(sources):
+    for source in sources:
         if not source.exists():
             continue
 
         values = _read_env_values(source)
-        if "GMAIL_ADDRESS" not in values or "GMAIL_APP_PASSWORD" not in values:
+        email = values.get("GMAIL_ADDRESS", "").strip()
+        app_password = values.get("GMAIL_APP_PASSWORD", "").strip()
+        if not email or not app_password:
             return None, str(source), (
                 f"Gmail configuration incomplete in {source}. "
-                "Need GMAIL_ADDRESS and GMAIL_APP_PASSWORD."
+                "Need non-empty GMAIL_ADDRESS and GMAIL_APP_PASSWORD."
             )
 
         return {
-            "email": values["GMAIL_ADDRESS"],
-            "app_password": values["GMAIL_APP_PASSWORD"],
+            "email": email,
+            "app_password": app_password,
         }, str(source), None
-
-        if index == 0 and not env_file:
-            break
 
     return None, None, (
         f"Gmail not configured. Create {DEFAULT_ENV_FILE} with GMAIL_ADDRESS and "
@@ -194,7 +202,11 @@ def validate_service_config(config, gmail_config=None, require_gmail=False):
         if section not in config or not isinstance(config[section], dict):
             issues.append(f"Missing required config section: {section}.")
 
-    if metadata and not metadata.get("local_config_exists", False):
+    if (
+        metadata
+        and not metadata.get("local_config_exists", False)
+        and not metadata.get("local_config_is_default", False)
+    ):
         issues.append(
             f"Local override file is missing: {metadata.get('local_config_path', DEFAULT_LOCAL_CONFIG_PATH)}."
         )
