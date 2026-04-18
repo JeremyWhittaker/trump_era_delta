@@ -78,6 +78,10 @@ None - plan executed exactly as written.
 
 - The repository source files were still untracked from the brownfield import, so `send_gmail.py`, `README.md`, `email_recipients.txt`, and `send_test_email.py` entered git history for the first time during this plan instead of as modifications to tracked files.
 
+## Post-Plan Hardening
+
+- Follow-up commit `946ceb8` closed the Phase 1 review findings by rejecting blank `.env.local` placeholders, treating the default local override file as optional, and removing the stale file-based recipient path from `main.py`.
+
 ## User Setup Required
 
 None - no external service configuration required.

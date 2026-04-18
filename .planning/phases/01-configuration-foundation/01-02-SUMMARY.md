@@ -88,6 +88,10 @@ Each task was committed atomically:
 
 - The local machine currently lacks `asset_prices`, recipients, and Gmail secrets, so the real `check --json` command was verified against expected failure output rather than a clean pass.
 
+## Post-Plan Hardening
+
+- Follow-up commit `946ceb8` tightened the CLI contract after review by making `check` surface missing analysis dependencies explicitly and by making `run` exit non-zero on fatal reference-window errors instead of silently retrying forever.
+
 ## User Setup Required
 
 None - no external service configuration required.

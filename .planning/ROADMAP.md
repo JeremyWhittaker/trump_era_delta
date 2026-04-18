@@ -12,7 +12,7 @@ This roadmap turns the current script-oriented market monitor into a maintainabl
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Configuration Foundation** - Establish project-local config, bootstrap validation, and a clean operator entrypoint
+- [x] **Phase 1: Configuration Foundation** - Establish project-local config, bootstrap validation, and a clean operator entrypoint (completed 2026-04-17)
 - [ ] **Phase 2: Shared Analysis Core** - Extract the common data, band, and report-generation pipeline out of the current scripts
 - [ ] **Phase 3: Alert Reliability** - Make test and live email delivery operational and restart-safe
 - [ ] **Phase 4: Local Service Operations** - Package the monitor as a managed local service with clean runtime storage
@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The startup command validates missing config, missing secrets, and invalid paths before entering the monitoring loop.
   3. Recipients and alert-related settings are read from configuration instead of hard-coded defaults or stale scripts.
   4. Operator can run a no-send validation command to confirm configuration before enabling live emails.
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 
 Plans:
 - [x] 01-01: Design the project-local config layout, secret loading rules, and runtime directory contract
@@ -104,7 +104,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Configuration Foundation | 3/3 | In Progress |   |
+| 1. Configuration Foundation | 3/3 | Complete | 2026-04-17 |
 | 2. Shared Analysis Core | 0/3 | Not started | - |
 | 3. Alert Reliability | 0/3 | Not started | - |
 | 4. Local Service Operations | 0/3 | Not started | - |

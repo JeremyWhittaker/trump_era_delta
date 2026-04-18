@@ -7,13 +7,13 @@
 
 ### Configuration
 
-- [ ] **CONF-01**: Operator can store non-secret service settings in a project-local config file committed with the repo.
-- [ ] **CONF-02**: Operator can keep machine-specific secrets out of committed source while the service documents and validates the required secret inputs.
-- [ ] **CONF-03**: Operator can manage alert recipients from project-local configuration without editing Python code.
+- [x] **CONF-01**: Operator can store non-secret service settings in a project-local config file committed with the repo.
+- [x] **CONF-02**: Operator can keep machine-specific secrets out of committed source while the service documents and validates the required secret inputs.
+- [x] **CONF-03**: Operator can manage alert recipients from project-local configuration without editing Python code.
 
 ### Service Runtime
 
-- [ ] **SRVC-01**: Operator can start the monitor from one documented command that validates configuration before entering the monitoring loop.
+- [x] **SRVC-01**: Operator can start the monitor from one documented command that validates configuration before entering the monitoring loop.
 - [ ] **SRVC-02**: Operator can install and run the monitor as a local background service with documented start, stop, restart, status, and enable commands.
 - [ ] **SRVC-03**: Service can restart on failure and resume monitoring with previously persisted alert state.
 
@@ -33,7 +33,7 @@
 ### Operations
 
 - [ ] **OPER-01**: Service writes logs and generated artifacts to dedicated runtime paths that do not dirty the source tree.
-- [ ] **OPER-02**: Operator can run a no-send verification or config-check command before enabling live emails.
+- [x] **OPER-02**: Operator can run a no-send verification or config-check command before enabling live emails.
 - [ ] **OPER-03**: Project includes a smoke-test path that verifies config loading, analysis, chart generation, and email delivery end to end.
 - [ ] **OPER-04**: Operator can follow repo documentation to install, configure, test, and enable the service locally without reverse-engineering the scripts.
 
@@ -64,11 +64,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONF-01 | Phase 1 | Pending |
-| CONF-02 | Phase 1 | Pending |
-| CONF-03 | Phase 1 | Pending |
-| SRVC-01 | Phase 1 | Pending |
-| OPER-02 | Phase 1 | Pending |
+| CONF-01 | Phase 1 | Complete |
+| CONF-02 | Phase 1 | Complete |
+| CONF-03 | Phase 1 | Complete |
+| SRVC-01 | Phase 1 | Complete |
+| OPER-02 | Phase 1 | Complete |
 | ANLY-01 | Phase 2 | Pending |
 | ANLY-02 | Phase 2 | Pending |
 | ANLY-03 | Phase 2 | Pending |
@@ -89,4 +89,4 @@
 
 ---
 *Requirements defined: 2026-04-17*
-*Last updated: 2026-04-17 after initial definition*
+*Last updated: 2026-04-17 after Phase 1 completion*
