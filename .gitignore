@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+
+config/service.local.json
+.env.local
+runtime/
+plots/
+main.log

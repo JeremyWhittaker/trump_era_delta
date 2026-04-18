@@ -1,0 +1,27 @@
+{
+  "asset_prices": {
+    "repo_path": "/home/shared/algos/asset_prices",
+    "data_dir": "/home/shared/algos/asset_prices/data",
+    "data_type": "adjusted"
+  },
+  "monitor": {
+    "symbol": "VOO",
+    "source": "alpaca",
+    "original_start": "2016-11-08",
+    "original_end": "2020-11-03",
+    "new_start": "2024-11-05",
+    "new_end": "today",
+    "sma_window": 100,
+    "plot_bands": true,
+    "plot_bollinger_bands": false,
+    "check_frequency_minutes": 15
+  },
+  "alerts": {
+    "enabled": true,
+    "recipients": []
+  },
+  "runtime": {
+    "html_output_path": "./plots/index.html",
+    "log_path": "./runtime/main.log"
+  }
+}
