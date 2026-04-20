@@ -19,9 +19,9 @@
 
 ### Analysis Pipeline
 
-- [ ] **ANLY-01**: Service can load benchmark and current-period market data from the configured local `asset_prices` paths and fail with a clear operator error if the dependency is unavailable.
-- [ ] **ANLY-02**: The monitor, test-alert path, and verification commands use the same shared analysis pipeline for data preparation, band calculation, and chart generation.
-- [ ] **ANLY-03**: Operator can generate the current comparison report and charts from the refactored service code without manually patching scripts.
+- [x] **ANLY-01**: Service can load benchmark and current-period market data from the configured local `asset_prices` paths and fail with a clear operator error if the dependency is unavailable.
+- [x] **ANLY-02**: The monitor, test-alert path, and verification commands use the same shared analysis pipeline for data preparation, band calculation, and chart generation.
+- [x] **ANLY-03**: Operator can generate the current comparison report and charts from the refactored service code without manually patching scripts.
 
 ### Alerts
 
@@ -69,9 +69,9 @@
 | CONF-03 | Phase 1 | Complete |
 | SRVC-01 | Phase 1 | Complete |
 | OPER-02 | Phase 1 | Complete |
-| ANLY-01 | Phase 2 | Pending |
-| ANLY-02 | Phase 2 | Pending |
-| ANLY-03 | Phase 2 | Pending |
+| ANLY-01 | Phase 2 | Complete |
+| ANLY-02 | Phase 2 | Complete |
+| ANLY-03 | Phase 2 | Complete |
 | ALRT-01 | Phase 3 | Pending |
 | ALRT-02 | Phase 3 | Pending |
 | ALRT-03 | Phase 3 | Pending |
@@ -89,4 +89,4 @@
 
 ---
 *Requirements defined: 2026-04-17*
-*Last updated: 2026-04-17 after Phase 1 completion*
+*Last updated: 2026-04-19 after Phase 2 completion*

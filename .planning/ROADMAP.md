@@ -13,7 +13,7 @@ This roadmap turns the current script-oriented market monitor into a maintainabl
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Configuration Foundation** - Establish project-local config, bootstrap validation, and a clean operator entrypoint (completed 2026-04-17)
-- [ ] **Phase 2: Shared Analysis Core** - Extract the common data, band, and report-generation pipeline out of the current scripts
+- [x] **Phase 2: Shared Analysis Core** - Extract the common data, band, and report-generation pipeline out of the current scripts (completed 2026-04-19)
 - [ ] **Phase 3: Alert Reliability** - Make test and live email delivery operational and restart-safe
 - [ ] **Phase 4: Local Service Operations** - Package the monitor as a managed local service with clean runtime storage
 - [ ] **Phase 5: Verification And Handoff** - Add smoke checks and operator docs so the service can be trusted and maintained
@@ -45,12 +45,12 @@ Plans:
   2. The monitor and verification commands both execute through the shared analysis path instead of keeping separate copies of the logic.
   3. Missing `asset_prices` dependencies or schema problems fail with actionable operator errors.
   4. Operator can generate the current comparison report from the refactored code without patching helper scripts.
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 02-01: Extract shared data-loading and analysis helpers from `main.py`, `predict_prophet.py`, and `send_test_email.py`
-- [ ] 02-02: Extract report and chart generation into reusable functions with a stable result contract
-- [ ] 02-03: Rewire supported commands to use the shared analysis core and remove stale call patterns
+- [x] 02-01: Extract shared data-loading and analysis helpers from `main.py`, `predict_prophet.py`, and `send_test_email.py`
+- [x] 02-02: Extract report and chart generation into reusable functions with a stable result contract
+- [x] 02-03: Rewire supported commands to use the shared analysis core and remove stale call patterns
 
 ### Phase 3: Alert Reliability
 **Goal**: Restore the test-email path, harden live delivery, and persist alert state so restarts do not create noisy or missing alerts.
@@ -105,7 +105,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Configuration Foundation | 3/3 | Complete | 2026-04-17 |
-| 2. Shared Analysis Core | 0/3 | Not started | - |
+| 2. Shared Analysis Core | 3/3 | Complete | 2026-04-19 |
 | 3. Alert Reliability | 0/3 | Not started | - |
 | 4. Local Service Operations | 0/3 | Not started | - |
 | 5. Verification And Handoff | 0/2 | Not started | - |

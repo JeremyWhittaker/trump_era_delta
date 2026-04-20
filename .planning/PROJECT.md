@@ -21,12 +21,13 @@ The monitor runs reliably on this machine and delivers trustworthy email alerts 
 - ✓ Phase 1: Load Gmail secrets from `.env.local` with validation and redacted config inspection
 - ✓ Phase 1: Use one validated CLI surface for `check`, `run`, `test-email`, and `show-config`
 - ✓ Phase 1: Manage alert recipients from config instead of committed source files
+- ✓ Phase 2: Use shared `analysis_core.py` and `report_pipeline.py` modules for supported analysis and chart generation
+- ✓ Phase 2: Expose `python3 main.py report` as the supported no-email comparison-report workflow
 
 ### Active
 
 - [ ] Refactor the script-oriented codebase into a maintainable local background service with a clear operator workflow.
 - [ ] Make the alert pipeline operational end to end, including successful test-email delivery and restart-safe live alerting.
-- [ ] Consolidate duplicated analysis, plotting, and email wiring into shared code that powers the monitor and verification paths.
 - [ ] Add smoke-check and operator documentation paths so the service can be configured and trusted without source edits.
 
 ### Out of Scope
@@ -58,10 +59,11 @@ The service depends on a sibling `asset_prices` repository for parquet-backed ma
 | Keep configuration centered in project-local files with secrets separated | The user wants config in the repo, but committed secrets would be unsafe | Implemented in Phase 1 via `config/service.json`, `config/service.local.json`, and `.env.local` |
 | Treat receipt of a configured test email as the primary operational acceptance check | The user wants a direct proof that alerts work end to end | Still the acceptance rule for alert-reliability work |
 | Focus the milestone on the monitor, alert path, and operator workflow before forecast productionization | The forecast script is experimental and not part of the requested service outcome | Confirmed by the Phase 1-5 roadmap |
+| Preserve current analysis semantics while extracting shared modules | The user wants the project operational, not a rewritten methodology during refactor | Implemented in Phase 2 via `analysis_core.py`, `report_pipeline.py`, and the shared `report` CLI path |
 
 ## Current State
 
-Phase 1 is complete. The project now has a validated configuration/bootstrap layer, redacted config inspection, strict no-send preflight, and a single CLI surface for live runs and test-email execution. The next priority is extracting the duplicated analysis/report path into shared code before making live alerts restart-safe and packaging the monitor as a managed local service.
+Phases 1 and 2 are complete. The project now has a validated configuration/bootstrap layer plus a shared analysis/report core used by `run`, `report`, and `test-email`. The next priority is Alert Reliability: prove live test-email delivery, normalize alert payload behavior, and persist alert state so restarts do not create noisy transitions.
 
 ## Evolution
 
@@ -81,4 +83,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-17 after Phase 1 completion*
+*Last updated: 2026-04-19 after Phase 2 completion*

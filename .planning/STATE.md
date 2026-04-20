@@ -2,35 +2,36 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-17)
+See: .planning/PROJECT.md (updated 2026-04-19)
 
 **Core value:** The monitor runs reliably on this machine and delivers trustworthy email alerts when the market crosses meaningful regression bands.
-**Current focus:** Phase 2 — Shared Analysis Core
+**Current focus:** Phase 3 — Alert Reliability
 
 ## Current Position
 
-Phase: 2 (Shared Analysis Core) — READY TO EXECUTE
-Plan: 0 of 3
-Status: Phase 2 planning complete — ready to execute
-Last activity: 2026-04-19 -- Phase 2 planning complete
+Phase: 3 (Alert Reliability) — READY TO DISCUSS
+Plan: 3 of 3
+Status: Phase 2 complete and verified; next step is Phase 3 discussion
+Last activity: 2026-04-19 -- Phase 2 execution complete
 
-Progress: [██░░░░░░░░] 20%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 4.3 min
-- Total execution time: 0.2 hours
+- Total plans completed: 6
+- Average duration: 4.7 min
+- Total execution time: 0.5 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Configuration Foundation | 3 | 13 min | 4.3 min |
+| 2. Shared Analysis Core | 3 | 15 min | 5.0 min |
 
 **Recent Trend:**
-- Last 3 plans: 4 min, 7 min, 2 min
+- Last 3 plans: 4 min, 6 min, 5 min
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -49,6 +50,8 @@ Recent decisions affecting current work:
 - [Phase 1]: Prefer project-local `.env.local` for Gmail secrets, with temporary fallback to `~/.gmail_send/.env`
 - [Phase 1]: Standardize operator entrypoints around `main.py check`, `run`, `test-email`, and `show-config`
 - [Phase 1]: Keep `main.py` import-safe by lazy-loading the analysis stack and resolving `asset_prices` only during validated runtime paths
+- [Phase 2]: Keep supported analysis semantics stable while extracting shared `analysis_core.py` and `report_pipeline.py`
+- [Phase 2]: Add `main.py report` as the supported no-email path for chart/report generation
 
 ### Pending Todos
 
@@ -56,7 +59,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Alert state is process-local only in the current monitor
+- Alert state is still process-local only in the current monitor
 - The service currently depends on a sibling `asset_prices` checkout and has no automated smoke coverage
 
 ## Deferred Items
@@ -68,6 +71,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-19 20:34 MST
-Stopped at: Phase 2 planning complete; next step is Phase 2 execution
-Resume file: .planning/phases/02-shared-analysis-core/02-01-PLAN.md
+Last session: 2026-04-19 21:27 MST
+Stopped at: Phase 2 execution complete; next step is Phase 3 discussion
+Resume file: .planning/phases/02-shared-analysis-core/02-VERIFICATION.md

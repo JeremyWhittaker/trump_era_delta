@@ -149,7 +149,13 @@ python3 main.py show-config --json
 python3 main.py check
 ```
 
-3. Send a one-shot test email through the validated bootstrap path:
+3. Generate the supported no-email report and chart artifacts through the shared analysis core:
+
+```bash
+python3 main.py report
+```
+
+4. Send a one-shot test email through the same validated analysis and report pipeline:
 
 ```bash
 python3 main.py test-email
@@ -161,11 +167,13 @@ The legacy helper now forwards to the same command:
 python3 send_test_email.py
 ```
 
-4. Start the long-running monitor only after `check` succeeds:
+5. Start the long-running monitor only after `check` succeeds:
 
 ```bash
 python3 main.py run
 ```
+
+`run`, `report`, and `test-email` now share the same validated analysis core and chart/report generation path. `report` never invokes SMTP; it only refreshes the configured HTML and JPEG outputs.
 
 ### Config Files
 
