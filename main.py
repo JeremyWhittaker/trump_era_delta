@@ -9,6 +9,13 @@ from pathlib import Path
 from shutil import copyfile
 
 from alert_pipeline import build_alert_payload, send_alert_email
+from alert_state import (
+    evaluate_transition,
+    load_alert_state,
+    record_delivery_result,
+    resolve_alert_state_path,
+    save_alert_state,
+)
 from analysis_core import load_price_history
 from analysis_core import prepare_analysis_frames as _prepare_analysis_frames
 from report_pipeline import generate_comparison_report
@@ -325,12 +332,22 @@ def main_loop(
     email_recipients,
     check_frequency,
     html_output_path,
+    log_path,
+    alert_state_path,
     data_dir,
     data_type,
     read_symbol_data_fn,
 ):
     """Run the long-lived monitor loop using the shared analysis/report pipeline."""
-    previous_band = None
+    state_path = resolve_alert_state_path(
+        log_path=log_path,
+        configured_path=alert_state_path,
+    )
+    try:
+        state = load_alert_state(state_path)
+    except ValueError as exc:
+        logging.error(f"Fatal alert state error: {exc}")
+        return False
 
     while True:
         try:
@@ -358,20 +375,26 @@ def main_loop(
             )
             report = analysis_result["report"]
             current_band = report["current_band"]
+            observed_at = now.isoformat()
+            transition_result = evaluate_transition(state, current_band, observed_at)
+            state = transition_result["state"]
+            save_alert_state(state_path, state)
+            transition = transition_result["transition"]
 
-            if previous_band is None:
-                previous_band = current_band
-            elif current_band != previous_band:
+            if transition and transition_result["action"] in {
+                "new_transition",
+                "retry_pending",
+            }:
                 logging.info(
                     "Regression band changed from %s to %s.",
-                    previous_band,
-                    current_band,
+                    transition["from_band"],
+                    transition["to_band"],
                 )
                 if email_notifications:
                     payload = build_alert_payload(
                         symbol=symbol,
                         source=source,
-                        previous_band=previous_band,
+                        previous_band=transition["from_band"],
                         report=report,
                         days_original=len(analysis_result["reference_frame"]),
                         days_new=len(analysis_result["current_frame"]),
@@ -386,11 +409,17 @@ def main_loop(
                         recipients=email_recipients,
                         payload=payload,
                     )
+                    state = record_delivery_result(
+                        state,
+                        transition,
+                        delivered=success,
+                        error_message=None if success else message,
+                    )
+                    save_alert_state(state_path, state)
                     if success:
                         logging.info("Professional HTML email sent successfully.")
                     else:
                         logging.error(f"Failed to send email: {message}")
-                previous_band = current_band
         except ValueError as exc:
             logging.error(f"Fatal analysis error: {exc}")
             return False
@@ -534,6 +563,7 @@ def _runtime_settings_from_config(config, reader_callable):
         "check_frequency": monitor.get("check_frequency_minutes", 15),
         "html_output_path": runtime.get("html_output_path", "./plots/index.html"),
         "log_path": runtime.get("log_path", "./runtime/main.log"),
+        "alert_state_path": runtime.get("alert_state_path"),
         "data_dir": asset_prices.get("data_dir"),
         "data_type": asset_prices.get("data_type", "adjusted"),
         "read_symbol_data_fn": reader_callable,
