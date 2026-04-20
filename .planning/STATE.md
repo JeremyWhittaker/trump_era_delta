@@ -2,26 +2,26 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-19)
+See: .planning/PROJECT.md (updated 2026-04-20)
 
 **Core value:** The monitor runs reliably on this machine and delivers trustworthy email alerts when the market crosses meaningful regression bands.
-**Current focus:** Phase 3 — Alert Reliability
+**Current focus:** Phase 4 — Local Service Operations
 
 ## Current Position
 
-Phase: 3 (Alert Reliability) — READY TO EXECUTE
+Phase: 4 (Local Service Operations) — READY TO DISCUSS
 Plan: 0 of 3
-Status: Phase 3 planning complete -- ready to execute
-Last activity: 2026-04-19 -- Phase 3 planning complete
+Status: Phase 3 complete -- ready for Phase 4 discussion
+Last activity: 2026-04-20 -- Phase 3 completion recorded
 
-Progress: [████░░░░░░] 40%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 4.7 min
-- Total execution time: 0.5 hours
+- Total plans completed: 9
+- Average duration: 4.1 min
+- Total execution time: 0.6 hours
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [████░░░░░░] 40%
 |-------|-------|-------|----------|
 | 1. Configuration Foundation | 3 | 13 min | 4.3 min |
 | 2. Shared Analysis Core | 3 | 15 min | 5.0 min |
+| 3. Alert Reliability | 3 | 9 min | 3.0 min |
 
 **Recent Trend:**
-- Last 3 plans: 4 min, 6 min, 5 min
-- Trend: Stable
+- Last 3 plans: 3 min, 3 min, 3 min
+- Trend: Improving
 
 *Updated after each plan completion*
 
@@ -54,6 +55,7 @@ Recent decisions affecting current work:
 - [Phase 2]: Add `main.py report` as the supported no-email path for chart/report generation
 - [Phase 3]: `main.py test-email` should prove the real SMTP/template path by sending the same payload contract used for live alerts
 - [Phase 3]: Persist last observed and last delivered alert state locally so restarts can retry pending failures without duplicating delivered transitions
+- [Phase 3]: Add `main.py run --once` so one live alert cycle can be verified without entering the long-running loop
 
 ### Pending Todos
 
@@ -61,8 +63,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- Alert state is still process-local only in the current monitor
-- The service currently depends on a sibling `asset_prices` checkout and has no automated smoke coverage
+- Machine-local Gmail credentials and alert recipients are still unset, so a real `test-email` send remains blocked on operator setup
+- The service still needs Phase 4 packaging under a local service manager and dedicated runtime-path handling
 
 ## Deferred Items
 
@@ -73,6 +75,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-19 22:08 MST
-Stopped at: Phase 3 planning complete; next step is Phase 3 execution
-Resume file: .planning/phases/03-alert-reliability/03-01-PLAN.md
+Last session: 2026-04-20 10:07 MST
+Stopped at: Phase 3 completion recorded; next step is Phase 4 discussion
+Resume file: .planning/phases/03-alert-reliability/03-VERIFICATION.md

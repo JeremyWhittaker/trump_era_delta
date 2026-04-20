@@ -25,10 +25,10 @@
 
 ### Alerts
 
-- [ ] **ALRT-01**: Operator can send a test alert email to configured recipients and receive it successfully.
-- [ ] **ALRT-02**: Service sends a live alert when the monitored regression band changes.
-- [ ] **ALRT-03**: Alert emails include the expected rendered summary and inline charts.
-- [ ] **ALRT-04**: Service persists last observed and last delivered alert state so restarts do not emit duplicate transition alerts.
+- [x] **ALRT-01**: Operator can send a test alert email to configured recipients and receive it successfully.
+- [x] **ALRT-02**: Service sends a live alert when the monitored regression band changes.
+- [x] **ALRT-03**: Alert emails include the expected rendered summary and inline charts.
+- [x] **ALRT-04**: Service persists last observed and last delivered alert state so restarts do not emit duplicate transition alerts.
 
 ### Operations
 
@@ -72,10 +72,10 @@
 | ANLY-01 | Phase 2 | Complete |
 | ANLY-02 | Phase 2 | Complete |
 | ANLY-03 | Phase 2 | Complete |
-| ALRT-01 | Phase 3 | Pending |
-| ALRT-02 | Phase 3 | Pending |
-| ALRT-03 | Phase 3 | Pending |
-| ALRT-04 | Phase 3 | Pending |
+| ALRT-01 | Phase 3 | Complete |
+| ALRT-02 | Phase 3 | Complete |
+| ALRT-03 | Phase 3 | Complete |
+| ALRT-04 | Phase 3 | Complete |
 | SRVC-02 | Phase 4 | Pending |
 | SRVC-03 | Phase 4 | Pending |
 | OPER-01 | Phase 4 | Pending |
@@ -89,4 +89,4 @@
 
 ---
 *Requirements defined: 2026-04-17*
-*Last updated: 2026-04-19 after Phase 2 completion*
+*Last updated: 2026-04-20 after Phase 3 completion*
