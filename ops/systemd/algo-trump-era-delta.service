@@ -1,0 +1,17 @@
+[Unit]
+Description=Algo Trump Era Delta Monitor
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=%h/projects/trump_era_delta/main.py
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/trump_era_delta
+ExecStart=%h/projects/trump_era_delta/.venv/bin/python %h/projects/trump_era_delta/main.py run
+Restart=on-failure
+RestartSec=60
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

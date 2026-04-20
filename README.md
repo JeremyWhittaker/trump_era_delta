@@ -187,6 +187,43 @@ python3 main.py run
 
 ---
 
+## Local Service
+
+This project is set up to run as a `systemd --user` service on Linux. The tracked unit template is [ops/systemd/algo-trump-era-delta.service](/home/jeremy/projects/trump_era_delta/ops/systemd/algo-trump-era-delta.service:1), and the helper installer is [scripts/install_user_service.sh](/home/jeremy/projects/trump_era_delta/scripts/install_user_service.sh:1).
+
+Install the unit:
+
+```bash
+./scripts/install_user_service.sh
+```
+
+Manage the service:
+
+```bash
+systemctl --user start algo-trump-era-delta.service
+systemctl --user stop algo-trump-era-delta.service
+systemctl --user restart algo-trump-era-delta.service
+systemctl --user status algo-trump-era-delta.service
+systemctl --user enable algo-trump-era-delta.service
+journalctl --user -u algo-trump-era-delta.service -f
+```
+
+The default runtime paths now live under `runtime/`:
+
+- `runtime/reports/` for generated HTML and chart artifacts
+- `runtime/service/main.log` for the file log
+- `runtime/service/alert_state.json` for persisted alert state
+
+If you want the service to keep running after logout, enable lingering for your user:
+
+```bash
+loginctl enable-linger "$USER"
+```
+
+That step may require elevated privileges depending on the machine policy.
+
+---
+
 ## Email Alerts
 
 When the market crosses a regression band threshold, the system sends a professional HTML email containing:

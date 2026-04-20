@@ -21,7 +21,8 @@
     "recipients_file": "config/recipients.txt"
   },
   "runtime": {
-    "html_output_path": "./plots/index.html",
-    "log_path": "./runtime/main.log"
+    "html_output_path": "./runtime/reports/index.html",
+    "log_path": "./runtime/service/main.log",
+    "alert_state_path": "./runtime/service/alert_state.json"
   }
 }
