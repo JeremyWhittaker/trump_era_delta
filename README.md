@@ -96,17 +96,17 @@ pip install -r requirements.txt
 
 ### Email Configuration
 
-The preferred secret path is the gitignored project-local `.env.local` file:
+The preferred secret path is the gitignored project-local `.env` file:
 
 ```bash
-cat > .env.local << 'EOF'
+cat > .env << 'EOF'
 GMAIL_ADDRESS=your_email@gmail.com
 GMAIL_APP_PASSWORD=your_16_char_app_password
 EOF
-chmod 600 .env.local
+chmod 600 .env
 ```
 
-The old `~/.gmail_send/.env` path still works as a temporary fallback during migration, but new setup should use `.env.local`.
+`.env.local` still works as a compatibility fallback, and `~/.gmail_send/.env` still works as a legacy fallback, but new setup should use `.env`.
 
 **Generating a Gmail App Password:**
 1. Navigate to [Google Account Security](https://myaccount.google.com/security)
@@ -115,21 +115,14 @@ The old `~/.gmail_send/.env` path still works as a temporary fallback during mig
 
 ### Alert Recipients
 
-Keep machine-specific recipients in `config/service.local.json`:
+Keep machine-specific recipients in the gitignored `config/recipients.txt` file, one address per line:
 
-```json
-{
-  "alerts": {
-    "enabled": true,
-    "recipients": [
-      "analyst@yourfirm.com",
-      "portfolio@yourfirm.com"
-    ]
-  }
-}
+```text
+analyst@yourfirm.com
+portfolio@yourfirm.com
 ```
 
-You can also override local paths or other runtime values in the same file without editing Python code.
+The committed `config/service.json` points the alert system at that file through `alerts.recipients_file`. Use `config/service.local.json` only for local JSON overrides such as asset paths or runtime settings.
 
 ---
 
@@ -186,8 +179,11 @@ python3 main.py run
 | File | Purpose |
 |------|---------|
 | `config/service.json` | Committed defaults for asset paths, monitor settings, alerts, and runtime outputs |
-| `config/service.local.json` | Gitignored machine-local overrides, including recipients |
-| `.env.local` | Gitignored Gmail credentials |
+| `config/service.local.json` | Gitignored machine-local JSON overrides such as local paths |
+| `config/recipients.txt` | Gitignored recipient list loaded by `alerts.recipients_file` |
+| `config/recipients.example.txt` | Tracked template for the expected recipients file format |
+| `.env` | Gitignored Gmail credentials |
+| `.env.example` | Tracked template for the required Gmail variables |
 
 ---
 

@@ -8,7 +8,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "service.json"
 DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config" / "service.local.json"
-DEFAULT_ENV_FILE = PROJECT_ROOT / ".env.local"
+DEFAULT_ENV_FILE = PROJECT_ROOT / ".env"
+COMPAT_ENV_FILE = PROJECT_ROOT / ".env.local"
 LEGACY_GMAIL_ENV_FILE = Path.home() / ".gmail_send" / ".env"
 
 PASSWORD_KEYS = {"GMAIL_APP_PASSWORD", "app_password", "password"}
@@ -17,6 +18,13 @@ REQUIRED_SECTIONS = ("asset_prices", "monitor", "alerts", "runtime")
 
 def _coerce_path(path_value):
     return Path(path_value).expanduser()
+
+
+def _resolve_project_path(path_value):
+    path = _coerce_path(path_value)
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
 
 
 def _read_json_object(path):
@@ -59,6 +67,19 @@ def _read_env_values(path):
             values[key.strip()] = value.strip().strip('"').strip("'")
 
     return values
+
+
+def _read_recipients_file(path):
+    recipients = []
+
+    with open(path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            recipients.append(line)
+
+    return recipients
 
 
 def _get_legacy_env_path(env):
@@ -151,6 +172,19 @@ def load_service_config(config_path=None, local_config_path=None, env=None):
     if monitor.get("new_end") == "today":
         monitor["new_end"] = date.today().isoformat()
 
+    alerts = merged.setdefault("alerts", {})
+    recipients_file_value = alerts.get("recipients_file")
+    if recipients_file_value:
+        recipients_path = _resolve_project_path(recipients_file_value)
+        metadata["recipients_file_path"] = str(recipients_path)
+        metadata["recipients_file_exists"] = recipients_path.exists()
+
+        if recipients_path.exists():
+            alerts["recipients"] = _read_recipients_file(recipients_path)
+            metadata["recipients_source"] = str(recipients_path)
+        else:
+            alerts.setdefault("recipients", [])
+
     merged["_metadata"] = deepcopy(metadata)
     return merged, metadata, None
 
@@ -164,7 +198,11 @@ def load_gmail_secret_config(env_file=None, env=None):
         }, "environment", None
 
     legacy_path = _get_legacy_env_path(env)
-    sources = [_coerce_path(env_file)] if env_file else [DEFAULT_ENV_FILE, legacy_path]
+    sources = (
+        [_coerce_path(env_file)]
+        if env_file
+        else [DEFAULT_ENV_FILE, COMPAT_ENV_FILE, legacy_path]
+    )
 
     for source in sources:
         if not source.exists():
@@ -186,7 +224,8 @@ def load_gmail_secret_config(env_file=None, env=None):
 
     return None, None, (
         f"Gmail not configured. Create {DEFAULT_ENV_FILE} with GMAIL_ADDRESS and "
-        f"GMAIL_APP_PASSWORD, or use legacy fallback {legacy_path}."
+        f"GMAIL_APP_PASSWORD, or use compatibility fallback {COMPAT_ENV_FILE}, "
+        f"or legacy fallback {legacy_path}."
     )
 
 
@@ -232,6 +271,13 @@ def validate_service_config(config, gmail_config=None, require_gmail=False):
 
     alerts = config.get("alerts", {})
     recipients = alerts.get("recipients", [])
+    recipients_file = alerts.get("recipients_file")
+    recipients_file_path = metadata.get("recipients_file_path")
+    recipients_file_exists = metadata.get("recipients_file_exists")
+
+    if recipients_file and recipients_file_path and not recipients_file_exists:
+        issues.append(f"alerts.recipients_file does not exist: {recipients_file_path}.")
+
     if alerts.get("enabled"):
         if not isinstance(recipients, list) or not any(str(item).strip() for item in recipients):
             issues.append("alerts.recipients must include at least one address when alerts.enabled is true.")

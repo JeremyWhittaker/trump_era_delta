@@ -3,7 +3,11 @@
 Gmail send utility using SMTP with App Password authentication.
 
 Configuration:
-  Preferred: create .env.local in the project root with:
+  Preferred: create .env in the project root with:
+    GMAIL_ADDRESS=your_email@gmail.com
+    GMAIL_APP_PASSWORD=your_app_password
+
+  Compatibility fallback: .env.local in the project root with:
     GMAIL_ADDRESS=your_email@gmail.com
     GMAIL_APP_PASSWORD=your_app_password
 
@@ -31,7 +35,7 @@ from service_config import load_gmail_secret_config
 
 
 def load_config():
-    """Load Gmail configuration from .env.local with legacy fallback support."""
+    """Load Gmail configuration from .env with compatibility fallback support."""
     config, _secret_source, error = load_gmail_secret_config()
     if error:
         return None, error

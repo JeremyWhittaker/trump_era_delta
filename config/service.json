@@ -18,7 +18,7 @@
   },
   "alerts": {
     "enabled": true,
-    "recipients": []
+    "recipients_file": "config/recipients.txt"
   },
   "runtime": {
     "html_output_path": "./plots/index.html",

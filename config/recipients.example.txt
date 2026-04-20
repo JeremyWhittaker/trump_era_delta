@@ -1,0 +1,3 @@
+# One alert recipient per line.
+analyst@example.com
+portfolio@example.com

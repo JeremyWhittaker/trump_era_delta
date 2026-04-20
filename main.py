@@ -555,7 +555,7 @@ def _add_shared_cli_options(parser):
     parser.add_argument(
         "--env-file",
         default=None,
-        help="Optional secret file path. Defaults to .env.local with legacy fallback to ~/.gmail_send/.env.",
+        help="Optional secret file path. Defaults to .env with .env.local compatibility fallback and ~/.gmail_send/.env legacy fallback.",
     )
     parser.add_argument(
         "--json",

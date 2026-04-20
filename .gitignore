@@ -1,9 +1,12 @@
 __pycache__/
 *.py[cod]
+*.swp
 .venv/
 
 config/service.local.json
+.env
 .env.local
+config/recipients.txt
 runtime/
 plots/
 main.log

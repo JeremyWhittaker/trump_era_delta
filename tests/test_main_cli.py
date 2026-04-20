@@ -139,7 +139,7 @@ class MainCliTests(unittest.TestCase):
             with mock.patch.object(main, "load_service_config", return_value=(config, {}, None)), mock.patch.object(
                 main,
                 "load_gmail_secret_config",
-                return_value=({"email": "sender@example.com", "app_password": "secret"}, ".env.local", None),
+                return_value=({"email": "sender@example.com", "app_password": "secret"}, ".env", None),
             ), mock.patch.object(
                 main,
                 "build_preflight_report",
@@ -282,14 +282,14 @@ class MainCliTests(unittest.TestCase):
             with mock.patch.object(main, "load_service_config", return_value=(config, {}, None)), mock.patch.object(
                 main,
                 "load_gmail_secret_config",
-                return_value=({"email": "sender@example.com", "app_password": "secret-value"}, ".env.local", None),
+                return_value=({"email": "sender@example.com", "app_password": "secret-value"}, ".env", None),
             ), redirect_stdout(output):
                 exit_code = main.main(["show-config", "--json"])
 
             rendered = output.getvalue()
             self.assertEqual(exit_code, 0)
             self.assertIn("ops@example.com", rendered)
-            self.assertIn(".env.local", rendered)
+            self.assertIn(".env", rendered)
             self.assertNotIn("secret-value", rendered)
 
     def test_show_config_omits_secret_source_when_secret_file_is_invalid(self):
@@ -301,13 +301,13 @@ class MainCliTests(unittest.TestCase):
             with mock.patch.object(main, "load_service_config", return_value=(config, {}, None)), mock.patch.object(
                 main,
                 "load_gmail_secret_config",
-                return_value=(None, ".env.local", "incomplete gmail config"),
+                return_value=(None, ".env", "incomplete gmail config"),
             ), redirect_stdout(output):
                 exit_code = main.main(["show-config", "--json"])
 
             rendered = output.getvalue()
             self.assertEqual(exit_code, 0)
-            self.assertNotIn(".env.local", rendered)
+            self.assertNotIn(".env", rendered)
             self.assertNotIn("secret_source", rendered)
 
     def test_check_fails_when_analysis_dependencies_are_missing(self):
@@ -316,7 +316,7 @@ class MainCliTests(unittest.TestCase):
             config = self._valid_config(Path(tmpdir))
 
             with mock.patch.object(main, "load_service_config", return_value=(config, {}, None)), mock.patch.object(
-                main, "load_gmail_secret_config", return_value=({"email": "sender@example.com", "app_password": "secret"}, ".env.local", None)
+                main, "load_gmail_secret_config", return_value=({"email": "sender@example.com", "app_password": "secret"}, ".env", None)
             ), mock.patch.object(
                 main,
                 "build_preflight_report",
