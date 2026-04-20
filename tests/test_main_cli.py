@@ -131,6 +131,38 @@ class MainCliTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
             main_loop.assert_not_called()
 
+    def test_run_once_uses_one_cycle_helper_instead_of_main_loop(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main = self._load_main()
+            config = self._valid_config(Path(tmpdir))
+
+            with mock.patch.object(main, "load_service_config", return_value=(config, {}, None)), mock.patch.object(
+                main,
+                "load_gmail_secret_config",
+                return_value=({"email": "sender@example.com", "app_password": "secret"}, ".env.local", None),
+            ), mock.patch.object(
+                main,
+                "build_preflight_report",
+                return_value={"ok": True, "errors": [], "warnings": [], "paths": {}},
+            ), mock.patch.object(
+                main, "print_preflight_report"
+            ), mock.patch.object(
+                main, "load_asset_prices_reader", return_value=(object(), None)
+            ), mock.patch.object(
+                main, "_check_analysis_dependencies", return_value=None
+            ), mock.patch.object(
+                main, "_configure_logging"
+            ), mock.patch.object(
+                main, "run_monitor_once", return_value=True
+            ) as run_monitor_once, mock.patch.object(
+                main, "main_loop"
+            ) as main_loop:
+                exit_code = main.main(["run", "--once"])
+
+            self.assertEqual(exit_code, 0)
+            run_monitor_once.assert_called_once()
+            main_loop.assert_not_called()
+
     def test_test_email_does_not_call_send_when_preflight_fails(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             main = self._load_main()
@@ -149,6 +181,46 @@ class MainCliTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 1)
             send_test_email_now.assert_not_called()
+
+    def test_run_monitor_once_does_not_sleep_and_uses_shared_cycle(self):
+        main = self._load_main()
+        initial_state = {"last_observed_band": 0, "pending_transition": None, "last_delivered_transition": None, "last_error": None}
+
+        with mock.patch.object(
+            main,
+            "_load_runtime_alert_state",
+            return_value=(Path("runtime/alert_state.json"), initial_state),
+        ) as load_state, mock.patch.object(
+            main,
+            "_run_monitor_cycle",
+            return_value=(initial_state, True),
+        ) as run_cycle, mock.patch.object(main.time, "sleep") as sleep:
+            success = main.run_monitor_once(
+                symbol="VOO",
+                source="alpaca",
+                original_start="2016-11-08",
+                original_end="2020-11-03",
+                new_start="2024-11-05",
+                new_end=date.today().isoformat(),
+                sma_window=100,
+                plot_bands=True,
+                plot_bollinger_bands=False,
+                email_notifications=True,
+                email_recipients=["ops@example.com"],
+                check_frequency=15,
+                html_output_path="./plots/index.html",
+                log_path="./runtime/main.log",
+                alert_state_path=None,
+                data_dir="./data",
+                data_type="adjusted",
+                read_symbol_data_fn=object(),
+            )
+
+        self.assertTrue(success)
+        load_state.assert_called_once_with("./runtime/main.log", None)
+        run_cycle.assert_called_once()
+        self.assertTrue(run_cycle.call_args.kwargs["fail_on_delivery_error"])
+        sleep.assert_not_called()
 
     def test_report_does_not_run_when_preflight_fails(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -185,19 +257,21 @@ class MainCliTests(unittest.TestCase):
             ), mock.patch.object(
                 main, "load_asset_prices_reader", return_value=(object(), None)
             ), mock.patch.object(
+                main, "_check_analysis_dependencies", return_value=None
+            ), mock.patch.object(
                 main, "_configure_logging"
             ), mock.patch.object(
                 main, "_run_analysis_report", return_value={"report": {"current_band": 1, "html_path": "plots/report.html", "zoomed_jpeg_path": "plots/zoom.jpeg"}, "reference_frame": [1], "current_frame": [1]}
             ), mock.patch.object(
-                main, "send_email"
-            ) as send_email, mock.patch.object(
-                main, "build_email_content"
-            ) as build_email_content:
+                main, "send_alert_email"
+            ) as send_alert_email, mock.patch.object(
+                main, "build_alert_payload"
+            ) as build_alert_payload:
                 exit_code = main.main(["report"])
 
             self.assertEqual(exit_code, 0)
-            send_email.assert_not_called()
-            build_email_content.assert_not_called()
+            send_alert_email.assert_not_called()
+            build_alert_payload.assert_not_called()
 
     def test_show_config_redacts_password_and_reports_secret_source(self):
         with tempfile.TemporaryDirectory() as tmpdir:

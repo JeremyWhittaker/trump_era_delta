@@ -318,6 +318,117 @@ def run_report_once(
     return True
 
 
+def _load_runtime_alert_state(log_path, alert_state_path):
+    state_path = resolve_alert_state_path(
+        log_path=log_path,
+        configured_path=alert_state_path,
+    )
+    return state_path, load_alert_state(state_path)
+
+
+def _run_monitor_cycle(
+    *,
+    state,
+    state_path,
+    symbol,
+    source,
+    original_start,
+    original_end,
+    new_start,
+    new_end,
+    sma_window,
+    plot_bands,
+    plot_bollinger_bands,
+    email_notifications,
+    email_recipients,
+    check_frequency,
+    html_output_path,
+    data_dir,
+    data_type,
+    read_symbol_data_fn,
+    fail_on_delivery_error=False,
+):
+    now = datetime.now(timezone.utc)
+    logging.info(
+        "Running analysis for %s at %s",
+        symbol,
+        now.strftime("%Y-%m-%d %H:%M:%S %Z"),
+    )
+
+    analysis_result = _run_analysis_report(
+        symbol=symbol,
+        source=source,
+        original_start=original_start,
+        original_end=original_end,
+        new_start=new_start,
+        new_end=new_end,
+        sma_window=sma_window,
+        plot_bands=plot_bands,
+        plot_bollinger_bands=plot_bollinger_bands,
+        html_output_path=html_output_path,
+        data_dir=data_dir,
+        data_type=data_type,
+        read_symbol_data_fn=read_symbol_data_fn,
+    )
+    report = analysis_result["report"]
+    current_band = report["current_band"]
+    observed_at = now.isoformat()
+    transition_result = evaluate_transition(state, current_band, observed_at)
+    state = transition_result["state"]
+    save_alert_state(state_path, state)
+    transition = transition_result["transition"]
+
+    if transition and transition_result["action"] in {"new_transition", "retry_pending"}:
+        if transition_result["action"] == "retry_pending":
+            logging.info(
+                "Retrying pending regression band alert from %s to %s.",
+                transition["from_band"],
+                transition["to_band"],
+            )
+        else:
+            logging.info(
+                "Regression band changed from %s to %s.",
+                transition["from_band"],
+                transition["to_band"],
+            )
+
+        if email_notifications:
+            payload = build_alert_payload(
+                symbol=symbol,
+                source=source,
+                previous_band=transition["from_band"],
+                report=report,
+                days_original=len(analysis_result["reference_frame"]),
+                days_new=len(analysis_result["current_frame"]),
+                sma_window=sma_window,
+                check_frequency=check_frequency,
+                original_start=original_start,
+                original_end=original_end,
+                new_start=new_start,
+                delivery_mode="live",
+            )
+            success, message = send_alert_email(
+                recipients=email_recipients,
+                payload=payload,
+            )
+            state = record_delivery_result(
+                state,
+                transition,
+                delivered=success,
+                error_message=None if success else message,
+            )
+            save_alert_state(state_path, state)
+
+            if success:
+                logging.info("Professional HTML email sent successfully.")
+            else:
+                logging.error(f"Failed to send email: {message}")
+                if fail_on_delivery_error:
+                    return state, False
+
+    return state, True
+
+
 def main_loop(
     symbol,
     source,
@@ -339,26 +450,17 @@ def main_loop(
     read_symbol_data_fn,
 ):
     """Run the long-lived monitor loop using the shared analysis/report pipeline."""
-    state_path = resolve_alert_state_path(
-        log_path=log_path,
-        configured_path=alert_state_path,
-    )
     try:
-        state = load_alert_state(state_path)
+        state_path, state = _load_runtime_alert_state(log_path, alert_state_path)
     except ValueError as exc:
         logging.error(f"Fatal alert state error: {exc}")
         return False
 
     while True:
         try:
-            now = datetime.now(timezone.utc)
-            logging.info(
-                "Running analysis for %s at %s",
-                symbol,
-                now.strftime("%Y-%m-%d %H:%M:%S %Z"),
-            )
-
-            analysis_result = _run_analysis_report(
+            state, _cycle_ok = _run_monitor_cycle(
+                state=state,
+                state_path=state_path,
                 symbol=symbol,
                 source=source,
                 original_start=original_start,
@@ -368,58 +470,15 @@ def main_loop(
                 sma_window=sma_window,
                 plot_bands=plot_bands,
                 plot_bollinger_bands=plot_bollinger_bands,
+                email_notifications=email_notifications,
+                email_recipients=email_recipients,
+                check_frequency=check_frequency,
                 html_output_path=html_output_path,
                 data_dir=data_dir,
                 data_type=data_type,
                 read_symbol_data_fn=read_symbol_data_fn,
+                fail_on_delivery_error=False,
             )
-            report = analysis_result["report"]
-            current_band = report["current_band"]
-            observed_at = now.isoformat()
-            transition_result = evaluate_transition(state, current_band, observed_at)
-            state = transition_result["state"]
-            save_alert_state(state_path, state)
-            transition = transition_result["transition"]
-
-            if transition and transition_result["action"] in {
-                "new_transition",
-                "retry_pending",
-            }:
-                logging.info(
-                    "Regression band changed from %s to %s.",
-                    transition["from_band"],
-                    transition["to_band"],
-                )
-                if email_notifications:
-                    payload = build_alert_payload(
-                        symbol=symbol,
-                        source=source,
-                        previous_band=transition["from_band"],
-                        report=report,
-                        days_original=len(analysis_result["reference_frame"]),
-                        days_new=len(analysis_result["current_frame"]),
-                        sma_window=sma_window,
-                        check_frequency=check_frequency,
-                        original_start=original_start,
-                        original_end=original_end,
-                        new_start=new_start,
-                        delivery_mode="live",
-                    )
-                    success, message = send_alert_email(
-                        recipients=email_recipients,
-                        payload=payload,
-                    )
-                    state = record_delivery_result(
-                        state,
-                        transition,
-                        delivered=success,
-                        error_message=None if success else message,
-                    )
-                    save_alert_state(state_path, state)
-                    if success:
-                        logging.info("Professional HTML email sent successfully.")
-                    else:
-                        logging.error(f"Failed to send email: {message}")
         except ValueError as exc:
             logging.error(f"Fatal analysis error: {exc}")
             return False
@@ -428,6 +487,58 @@ def main_loop(
 
         logging.info(f"Sleeping for {check_frequency} minutes before the next check...")
         time.sleep(check_frequency * 60)
+
+
+def run_monitor_once(
+    symbol,
+    source,
+    original_start,
+    original_end,
+    new_start,
+    new_end,
+    sma_window,
+    plot_bands,
+    plot_bollinger_bands,
+    email_notifications,
+    email_recipients,
+    check_frequency,
+    html_output_path,
+    log_path,
+    alert_state_path,
+    data_dir,
+    data_type,
+    read_symbol_data_fn,
+):
+    try:
+        state_path, state = _load_runtime_alert_state(log_path, alert_state_path)
+        _state, cycle_ok = _run_monitor_cycle(
+            state=state,
+            state_path=state_path,
+            symbol=symbol,
+            source=source,
+            original_start=original_start,
+            original_end=original_end,
+            new_start=new_start,
+            new_end=new_end,
+            sma_window=sma_window,
+            plot_bands=plot_bands,
+            plot_bollinger_bands=plot_bollinger_bands,
+            email_notifications=email_notifications,
+            email_recipients=email_recipients,
+            check_frequency=check_frequency,
+            html_output_path=html_output_path,
+            data_dir=data_dir,
+            data_type=data_type,
+            read_symbol_data_fn=read_symbol_data_fn,
+            fail_on_delivery_error=True,
+        )
+        return cycle_ok
+    except ValueError as exc:
+        logging.error(f"Fatal analysis error: {exc}")
+        return False
+    except Exception as exc:
+        logging.error(f"Error during analysis: {exc}")
+        return False
 
 
 def _add_shared_cli_options(parser):
@@ -470,6 +581,11 @@ def _build_parser():
         help="Run the monitoring loop after preflight validation succeeds.",
     )
     _add_shared_cli_options(run_parser)
+    run_parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run exactly one live analysis and alert-evaluation cycle, then exit.",
+    )
 
     report_parser = subparsers.add_parser(
         "report",
@@ -641,6 +757,8 @@ def main(argv=None):
     _configure_logging(runtime_settings["log_path"])
 
     if args.command == "run":
+        if args.once:
+            return 0 if run_monitor_once(**runtime_settings) is not False else 1
         return 0 if main_loop(**runtime_settings) is not False else 1
 
     if args.command == "report":
