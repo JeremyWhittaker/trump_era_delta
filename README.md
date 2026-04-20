@@ -167,13 +167,19 @@ The legacy helper now forwards to the same command:
 python3 send_test_email.py
 ```
 
-5. Start the long-running monitor only after `check` succeeds:
+5. Run one live-monitor cycle without sleeping so you can verify transition handling against the persisted alert state:
+
+```bash
+python3 main.py run --once
+```
+
+6. Start the long-running monitor only after `check` succeeds:
 
 ```bash
 python3 main.py run
 ```
 
-`run`, `report`, and `test-email` now share the same validated analysis core and chart/report generation path. `report` never invokes SMTP; it only refreshes the configured HTML and JPEG outputs.
+`run`, `run --once`, `report`, and `test-email` now share the same validated analysis core and chart/report generation path. `report` never invokes SMTP; `test-email` proves the real email path; `run --once` executes one live alert-evaluation cycle without entering the long-running loop.
 
 ### Config Files
 
