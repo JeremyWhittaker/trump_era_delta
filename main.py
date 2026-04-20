@@ -8,11 +8,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from shutil import copyfile
 
+from alert_pipeline import build_alert_payload, send_alert_email
 from analysis_core import load_price_history
 from analysis_core import prepare_analysis_frames as _prepare_analysis_frames
-from email_template import build_email_content
 from report_pipeline import generate_comparison_report
-from send_gmail import send_email
 from service_bootstrap import (
     build_preflight_report,
     load_asset_prices_reader,
@@ -127,44 +126,6 @@ def _validate_report_artifacts(report):
         logging.warning("Failed to generate full-term chart. Continuing with zoomed output only.")
 
 
-def _format_period_context(original_start, original_end, new_start):
-    datetime_cls = datetime
-    original_start_label = datetime_cls.strptime(original_start, "%Y-%m-%d").strftime("%b %Y")
-    original_end_label = datetime_cls.strptime(original_end, "%Y-%m-%d").strftime("%b %Y")
-    new_start_label = datetime_cls.strptime(new_start, "%Y-%m-%d").strftime("%b %Y")
-    return {
-        "reference_start": original_start_label,
-        "reference_end": original_end_label,
-        "current_start": new_start_label,
-    }
-
-
-def _build_inline_images(zoomed_jpeg_path, full_jpeg_path):
-    with open(zoomed_jpeg_path, "rb") as handle:
-        zoomed_chart_bytes = handle.read()
-
-    inline_images = [
-        {
-            "cid": "chart_zoomed",
-            "content": zoomed_chart_bytes,
-            "subtype": "jpeg",
-        }
-    ]
-
-    if full_jpeg_path and Path(full_jpeg_path).exists():
-        with open(full_jpeg_path, "rb") as handle:
-            full_chart_bytes = handle.read()
-        inline_images.append(
-            {
-                "cid": "chart_full",
-                "content": full_chart_bytes,
-                "subtype": "jpeg",
-            }
-        )
-
-    return inline_images
-
-
 def _run_analysis_report(
     symbol,
     source,
@@ -234,65 +195,6 @@ def _run_analysis_report(
         "reference_truncated_frame": df_original_truncated,
         "report": report,
     }
-
-
-def _send_band_email(
-    *,
-    symbol,
-    source,
-    previous_band,
-    report,
-    days_original,
-    days_new,
-    sma_window,
-    check_frequency,
-    original_start,
-    original_end,
-    new_start,
-    email_recipients,
-    subject,
-):
-    latest_date = report["latest_date"]
-    timestamp_utc = latest_date.strftime("%Y-%m-%d %H:%M:%S UTC")
-    period_context = _format_period_context(original_start, original_end, new_start)
-
-    html_body, text_body = build_email_content(
-        symbol=symbol,
-        source=source,
-        timestamp_utc=timestamp_utc,
-        latest_price=report["latest_price"],
-        previous_band=previous_band,
-        current_band=report["current_band"],
-        current_pct=report["current_pct"],
-        regression_line=report["regression_line"],
-        bands=report["bands"],
-        days_original=days_original,
-        days_new=days_new,
-        sma_window=sma_window,
-        check_frequency=check_frequency,
-        reference_period_name="Trump First Term",
-        reference_start=period_context["reference_start"],
-        reference_end=period_context["reference_end"],
-        current_period_name="Trump Second Term",
-        current_start=period_context["current_start"],
-        html_link=None,
-    )
-
-    inline_images = _build_inline_images(
-        report["zoomed_jpeg_path"],
-        report.get("full_jpeg_path"),
-    )
-
-    return send_email(
-        to_addrs=email_recipients,
-        subject=subject,
-        body=None,
-        html_body=html_body,
-        text_body=text_body,
-        inline_images=inline_images,
-    )
-
-
 def send_test_email_now(
     symbol,
     source,
@@ -334,10 +236,7 @@ def send_test_email_now(
         return False
 
     report = analysis_result["report"]
-    band_label = f"{'+' if report['current_band'] > 0 else ''}{report['current_band']}σ"
-    subject = f"TEST EMAIL: {symbol} @ {band_label} ({report['current_pct']:+.2%})"
-
-    success, message = _send_band_email(
+    payload = build_alert_payload(
         symbol=symbol,
         source=source,
         previous_band=report["current_band"],
@@ -349,8 +248,12 @@ def send_test_email_now(
         original_start=original_start,
         original_end=original_end,
         new_start=new_start,
-        email_recipients=email_recipients,
-        subject=subject,
+        delivery_mode="test",
+    )
+
+    success, message = send_alert_email(
+        recipients=email_recipients,
+        payload=payload,
     )
 
     if success:
@@ -465,11 +368,7 @@ def main_loop(
                     current_band,
                 )
                 if email_notifications:
-                    subject = (
-                        f"Regression Band Alert: {symbol} -> "
-                        f"{'+' if current_band > 0 else ''}{current_band}σ"
-                    )
-                    success, message = _send_band_email(
+                    payload = build_alert_payload(
                         symbol=symbol,
                         source=source,
                         previous_band=previous_band,
@@ -481,8 +380,11 @@ def main_loop(
                         original_start=original_start,
                         original_end=original_end,
                         new_start=new_start,
-                        email_recipients=email_recipients,
-                        subject=subject,
+                        delivery_mode="live",
+                    )
+                    success, message = send_alert_email(
+                        recipients=email_recipients,
+                        payload=payload,
                     )
                     if success:
                         logging.info("Professional HTML email sent successfully.")
