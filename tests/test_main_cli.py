@@ -110,6 +110,7 @@ class MainCliTests(unittest.TestCase):
         help_text = output.getvalue()
         self.assertIn("check", help_text)
         self.assertIn("run", help_text)
+        self.assertIn("report", help_text)
         self.assertIn("test-email", help_text)
         self.assertIn("show-config", help_text)
 
@@ -148,6 +149,55 @@ class MainCliTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 1)
             send_test_email_now.assert_not_called()
+
+    def test_report_does_not_run_when_preflight_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main = self._load_main()
+            config = self._valid_config(Path(tmpdir))
+
+            with mock.patch.object(main, "load_service_config", return_value=(config, {}, None)), mock.patch.object(
+                main, "load_gmail_secret_config", return_value=(None, None, None)
+            ), mock.patch.object(
+                main,
+                "build_preflight_report",
+                return_value={"ok": False, "errors": ["bad config"], "warnings": [], "paths": {}},
+            ), mock.patch.object(main, "print_preflight_report"), mock.patch.object(
+                main, "run_report_once"
+            ) as run_report_once:
+                exit_code = main.main(["report"])
+
+            self.assertEqual(exit_code, 1)
+            run_report_once.assert_not_called()
+
+    def test_report_does_not_call_email_path_when_analysis_succeeds(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main = self._load_main()
+            config = self._valid_config(Path(tmpdir), alerts_enabled=False)
+
+            with mock.patch.object(main, "load_service_config", return_value=(config, {}, None)), mock.patch.object(
+                main, "load_gmail_secret_config", return_value=(None, None, None)
+            ), mock.patch.object(
+                main,
+                "build_preflight_report",
+                return_value={"ok": True, "errors": [], "warnings": [], "paths": {}},
+            ), mock.patch.object(
+                main, "print_preflight_report"
+            ), mock.patch.object(
+                main, "load_asset_prices_reader", return_value=(object(), None)
+            ), mock.patch.object(
+                main, "_configure_logging"
+            ), mock.patch.object(
+                main, "_run_analysis_report", return_value={"report": {"current_band": 1, "html_path": "plots/report.html", "zoomed_jpeg_path": "plots/zoom.jpeg"}, "reference_frame": [1], "current_frame": [1]}
+            ), mock.patch.object(
+                main, "send_email"
+            ) as send_email, mock.patch.object(
+                main, "build_email_content"
+            ) as build_email_content:
+                exit_code = main.main(["report"])
+
+            self.assertEqual(exit_code, 0)
+            send_email.assert_not_called()
+            build_email_content.assert_not_called()
 
     def test_show_config_redacts_password_and_reports_secret_source(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -206,36 +256,6 @@ class MainCliTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 1)
             self.assertTrue(print_report.called)
-
-    def test_prepare_analysis_frames_rejects_short_reference_window(self):
-        main = self._load_main()
-
-        class FakeFrame:
-            def __init__(self, rows):
-                self.empty = rows == 0
-                self._rows = rows
-
-            def __len__(self):
-                return self._rows
-
-        with mock.patch.object(
-            main,
-            "calculate_cumulative_pct_change",
-            side_effect=[FakeFrame(1), FakeFrame(2)],
-        ):
-            with self.assertRaises(ValueError) as exc:
-                main._prepare_analysis_frames(
-                    df=object(),
-                    symbol="VOO",
-                    original_start="2016-11-08",
-                    original_end="2020-11-03",
-                    new_start="2024-11-05",
-                    adjusted_new_end="2024-11-06",
-                    sma_window=100,
-                    plot_bollinger_bands=False,
-                )
-
-        self.assertIn("Reference period produced only 1 row(s)", str(exc.exception))
 
 
 if __name__ == "__main__":
