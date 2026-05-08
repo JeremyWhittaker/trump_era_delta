@@ -174,6 +174,8 @@ python3 main.py run
 
 `run`, `run --once`, `report`, and `test-email` now share the same validated analysis core and chart/report generation path. `report` never invokes SMTP; `test-email` proves the real email path; `run --once` executes one live alert-evaluation cycle without entering the long-running loop.
 
+The monitor checks the latest available symbol bar before generating report artifacts. If the latest bar is older than `monitor.max_data_age_days` (default: 2 calendar days), the HTML/JPEG report includes a stale-data warning and live monitoring skips regression-band alert evaluation for that cycle.
+
 ### Config Files
 
 | File | Purpose |
@@ -184,6 +186,8 @@ python3 main.py run
 | `config/recipients.example.txt` | Tracked template for the expected recipients file format |
 | `.env` | Gitignored Gmail credentials |
 | `.env.example` | Tracked template for the required Gmail variables |
+
+`monitor.max_data_age_days` controls stale-data detection. Keep it low enough to catch broken local data refreshes, but high enough to account for weekends and market holidays in your operating schedule.
 
 ---
 

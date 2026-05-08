@@ -31,6 +31,7 @@ from service_config import (
 )
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+DEFAULT_MAX_DATA_AGE_DAYS = 2
 
 pd = None
 np = None
@@ -104,6 +105,44 @@ def _build_analysis_window(original_start, new_start, new_end):
     return earliest_start, end_date
 
 
+def _coerce_utc_datetime(value):
+    if hasattr(value, "to_pydatetime"):
+        value = value.to_pydatetime()
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _build_data_freshness(
+    symbol,
+    source,
+    latest_data_date,
+    now=None,
+    max_age_days=DEFAULT_MAX_DATA_AGE_DAYS,
+):
+    now = now or datetime.now(timezone.utc)
+    now = _coerce_utc_datetime(now)
+    latest_utc = _coerce_utc_datetime(latest_data_date)
+    age_days = (now.date() - latest_utc.date()).days
+    max_age_days = int(max_age_days)
+    warning = None
+
+    if age_days > max_age_days:
+        warning = (
+            f"Latest {symbol} {source} bar is {age_days} calendar days old "
+            f"(latest {latest_utc.date().isoformat()}, checked {now.date().isoformat()} UTC); "
+            f"threshold is {max_age_days} days."
+        )
+
+    return {
+        "latest_data_date": latest_utc.isoformat(),
+        "checked_at": now.isoformat(),
+        "age_days": age_days,
+        "max_age_days": max_age_days,
+        "warning": warning,
+    }
+
+
 def _copy_generated_html(html_path, html_output_path):
     if not html_path or not html_output_path:
         return
@@ -147,8 +186,10 @@ def _run_analysis_report(
     data_dir,
     data_type,
     read_symbol_data_fn,
+    max_data_age_days=DEFAULT_MAX_DATA_AGE_DAYS,
 ):
     earliest_start, end_date = _build_analysis_window(original_start, new_start, new_end)
+    now = datetime.now(timezone.utc)
 
     df = load_price_history(
         symbol,
@@ -163,7 +204,17 @@ def _run_analysis_report(
         raise ValueError(f"No data available for {symbol}.")
 
     latest_data_date = df["index"].max()
-    adjusted_new_end = min(latest_data_date, datetime.now(timezone.utc))
+    data_freshness = _build_data_freshness(
+        symbol=symbol,
+        source=source,
+        latest_data_date=latest_data_date,
+        now=now,
+        max_age_days=max_data_age_days,
+    )
+    if data_freshness["warning"]:
+        logging.warning(data_freshness["warning"])
+
+    adjusted_new_end = min(latest_data_date, now)
 
     df_original, df_new, df_original_truncated = _prepare_analysis_frames(
         df,
@@ -192,6 +243,7 @@ def _run_analysis_report(
         original_start=original_start,
         original_end=original_end,
         new_start=new_start,
+        data_freshness=data_freshness,
     )
     _validate_report_artifacts(report)
     _copy_generated_html(report.get("html_path"), html_output_path)
@@ -218,6 +270,7 @@ def send_test_email_now(
     data_type,
     read_symbol_data_fn,
     check_frequency,
+    max_data_age_days=DEFAULT_MAX_DATA_AGE_DAYS,
 ):
     """Run one analysis cycle and send a test email with the current chart."""
     logging.info(f"Generating test email for {symbol}...")
@@ -237,6 +290,7 @@ def send_test_email_now(
             data_dir=data_dir,
             data_type=data_type,
             read_symbol_data_fn=read_symbol_data_fn,
+            max_data_age_days=max_data_age_days,
         )
     except ValueError as exc:
         logging.error(str(exc))
@@ -285,6 +339,7 @@ def run_report_once(
     data_dir,
     data_type,
     read_symbol_data_fn,
+    max_data_age_days=DEFAULT_MAX_DATA_AGE_DAYS,
 ):
     """Generate the supported no-email report artifacts exactly once."""
     try:
@@ -302,6 +357,7 @@ def run_report_once(
             data_dir=data_dir,
             data_type=data_type,
             read_symbol_data_fn=read_symbol_data_fn,
+            max_data_age_days=max_data_age_days,
         )
     except ValueError as exc:
         logging.error(str(exc))
@@ -346,6 +402,7 @@ def _run_monitor_cycle(
     data_dir,
     data_type,
     read_symbol_data_fn,
+    max_data_age_days=DEFAULT_MAX_DATA_AGE_DAYS,
     fail_on_delivery_error=False,
 ):
     now = datetime.now(timezone.utc)
@@ -369,8 +426,17 @@ def _run_monitor_cycle(
         data_dir=data_dir,
         data_type=data_type,
         read_symbol_data_fn=read_symbol_data_fn,
+        max_data_age_days=max_data_age_days,
     )
     report = analysis_result["report"]
+    freshness_warning = report.get("freshness_warning")
+    if freshness_warning:
+        logging.warning(
+            "Skipping alert evaluation because data freshness check failed: %s",
+            freshness_warning,
+        )
+        return state, True
+
     current_band = report["current_band"]
     observed_at = now.isoformat()
     transition_result = evaluate_transition(state, current_band, observed_at)
@@ -448,6 +514,7 @@ def main_loop(
     data_dir,
     data_type,
     read_symbol_data_fn,
+    max_data_age_days=DEFAULT_MAX_DATA_AGE_DAYS,
 ):
     """Run the long-lived monitor loop using the shared analysis/report pipeline."""
     try:
@@ -477,6 +544,7 @@ def main_loop(
                 data_dir=data_dir,
                 data_type=data_type,
                 read_symbol_data_fn=read_symbol_data_fn,
+                max_data_age_days=max_data_age_days,
                 fail_on_delivery_error=False,
             )
         except ValueError as exc:
@@ -508,6 +576,7 @@ def run_monitor_once(
     data_dir,
     data_type,
     read_symbol_data_fn,
+    max_data_age_days=DEFAULT_MAX_DATA_AGE_DAYS,
 ):
     try:
         state_path, state = _load_runtime_alert_state(log_path, alert_state_path)
@@ -530,6 +599,7 @@ def run_monitor_once(
             data_dir=data_dir,
             data_type=data_type,
             read_symbol_data_fn=read_symbol_data_fn,
+            max_data_age_days=max_data_age_days,
             fail_on_delivery_error=True,
         )
         return cycle_ok
@@ -677,6 +747,7 @@ def _runtime_settings_from_config(config, reader_callable):
         "email_notifications": alerts.get("enabled", True),
         "email_recipients": alerts.get("recipients", []),
         "check_frequency": monitor.get("check_frequency_minutes", 15),
+        "max_data_age_days": monitor.get("max_data_age_days", DEFAULT_MAX_DATA_AGE_DAYS),
         "html_output_path": runtime.get("html_output_path", "./plots/index.html"),
         "log_path": runtime.get("log_path", "./runtime/main.log"),
         "alert_state_path": runtime.get("alert_state_path"),
@@ -778,6 +849,7 @@ def main(argv=None):
                 data_dir=runtime_settings["data_dir"],
                 data_type=runtime_settings["data_type"],
                 read_symbol_data_fn=runtime_settings["read_symbol_data_fn"],
+                max_data_age_days=runtime_settings["max_data_age_days"],
             )
             else 1
         )
@@ -798,6 +870,7 @@ def main(argv=None):
         data_type=runtime_settings["data_type"],
         read_symbol_data_fn=runtime_settings["read_symbol_data_fn"],
         check_frequency=runtime_settings["check_frequency"],
+        max_data_age_days=runtime_settings["max_data_age_days"],
     )
     return 0 if success else 1
 

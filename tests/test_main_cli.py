@@ -1,6 +1,6 @@
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from contextlib import redirect_stdout
 import importlib
@@ -330,6 +330,87 @@ class MainCliTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 1)
             self.assertTrue(print_report.called)
+
+    def test_build_data_freshness_warns_when_latest_bar_is_old(self):
+        main = self._load_main()
+
+        result = main._build_data_freshness(
+            symbol="VOO",
+            source="alpaca",
+            latest_data_date=datetime(2026, 5, 4, tzinfo=timezone.utc),
+            now=datetime(2026, 5, 8, tzinfo=timezone.utc),
+            max_age_days=2,
+        )
+
+        self.assertEqual(result["age_days"], 4)
+        self.assertEqual(result["max_age_days"], 2)
+        self.assertIn("Latest VOO alpaca bar is 4 calendar days old", result["warning"])
+
+    def test_build_data_freshness_allows_two_day_age(self):
+        main = self._load_main()
+
+        result = main._build_data_freshness(
+            symbol="VOO",
+            source="alpaca",
+            latest_data_date=datetime(2026, 5, 6, tzinfo=timezone.utc),
+            now=datetime(2026, 5, 8, tzinfo=timezone.utc),
+            max_age_days=2,
+        )
+
+        self.assertEqual(result["age_days"], 2)
+        self.assertIsNone(result["warning"])
+
+    def test_monitor_cycle_skips_alert_evaluation_when_data_is_stale(self):
+        main = self._load_main()
+        state = {
+            "last_observed_band": -4,
+            "pending_transition": None,
+            "last_delivered_transition": None,
+            "last_error": None,
+        }
+
+        with mock.patch.object(
+            main,
+            "_run_analysis_report",
+            return_value={
+                "report": {
+                    "current_band": -3,
+                    "freshness_warning": "Latest VOO alpaca bar is stale.",
+                },
+                "reference_frame": [1],
+                "current_frame": [1],
+            },
+        ), mock.patch.object(main, "evaluate_transition") as evaluate_transition, mock.patch.object(
+            main, "save_alert_state"
+        ) as save_alert_state, mock.patch.object(
+            main, "send_alert_email"
+        ) as send_alert_email:
+            returned_state, cycle_ok = main._run_monitor_cycle(
+                state=state,
+                state_path=Path("runtime/alert_state.json"),
+                symbol="VOO",
+                source="alpaca",
+                original_start="2016-11-08",
+                original_end="2020-11-03",
+                new_start="2024-11-05",
+                new_end=date.today().isoformat(),
+                sma_window=100,
+                plot_bands=True,
+                plot_bollinger_bands=False,
+                email_notifications=True,
+                email_recipients=["ops@example.com"],
+                check_frequency=15,
+                html_output_path="./plots/index.html",
+                data_dir="./data",
+                data_type="adjusted",
+                read_symbol_data_fn=object(),
+            )
+
+        self.assertIs(returned_state, state)
+        self.assertTrue(cycle_ok)
+        evaluate_transition.assert_not_called()
+        save_alert_state.assert_not_called()
+        send_alert_email.assert_not_called()
 
 
 if __name__ == "__main__":

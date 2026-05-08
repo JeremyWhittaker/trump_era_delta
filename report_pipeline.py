@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timezone
+from html import escape
 from pathlib import Path
 
 from analysis_core import get_regression_band
@@ -31,9 +32,11 @@ def plot_comparison(
     original_start="2016-11-08",
     original_end="2020-11-03",
     new_start="2024-11-05",
+    data_freshness=None,
 ):
     """Render comparison charts and the interactive HTML report."""
     go_module = _load_plot_dependencies()
+    data_freshness = data_freshness or {}
 
     output_dir = Path(output_dir).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -61,6 +64,15 @@ def plot_comparison(
     latest_date = df_new.iloc[-1]["index"]
     latest_date_short = latest_date.strftime("%Y-%m-%d")
     latest_cum_pct = df_new.iloc[-1]["cumulative_pct_change"]
+    freshness_warning = data_freshness.get("warning")
+    freshness_status = "STALE" if freshness_warning else "OK"
+    freshness_age_days = data_freshness.get("age_days")
+    freshness_warning_html = escape(freshness_warning or "")
+    freshness_detail = (
+        f"{freshness_age_days} day(s) old"
+        if freshness_age_days is not None
+        else "checked"
+    )
 
     current_band = None
     if "regression_line" in df_original_truncated.columns:
@@ -82,7 +94,7 @@ def plot_comparison(
     fig = go_module.Figure()
 
     if plot_bands and "regression_upper_band_1" in df_original.columns:
-        band_alphas = [0.12, 0.09, 0.06, 0.03]
+        band_alphas = [0.18, 0.14, 0.10, 0.06]
         for band_number in range(4, 0, -1):
             upper = df_original[f"regression_upper_band_{band_number}"]
             lower = (
@@ -151,7 +163,7 @@ def plot_comparison(
             )
 
     if plot_bands and "regression_upper_band_1" in df_original_truncated.columns:
-        band_alphas = [0.18, 0.14, 0.10, 0.06]
+        band_alphas = [0.30, 0.24, 0.18, 0.12]
         for band_number in range(4, 0, -1):
             upper = df_original_truncated[f"regression_upper_band_{band_number}"]
             lower = (
@@ -336,52 +348,16 @@ def plot_comparison(
         )
     )
 
-    fig.add_vline(
-        x=df_new["day_index"].iloc[-1],
-        line={"color": "rgba(44, 62, 80, 0.5)", "width": 1, "dash": "dot"},
-        annotation_text=f"Today: {latest_date_short}",
-        annotation_position="top",
-        annotation_font={"size": 10, "color": colors["text"]},
-    )
-
-    fig.add_annotation(
-        x=df_new["day_index"].iloc[-1],
-        y=latest_cum_pct,
-        text=f"  {latest_cum_pct:.1%}",
-        showarrow=False,
-        xanchor="left",
-        font={"size": 11, "color": colors["new_period"], "family": "Arial Black"},
-        bgcolor="rgba(255,255,255,0.8)",
-    )
-
-    if len(df_original) > len(df_new):
-        orig_at_new_len = df_original.iloc[len(df_new) - 1]["cumulative_pct_change"]
-        fig.add_annotation(
-            x=df_new["day_index"].iloc[-1],
-            y=orig_at_new_len,
-            text=f"  {orig_at_new_len:.1%}",
-            showarrow=False,
-            xanchor="left",
-            font={"size": 10, "color": colors["original_period"]},
-            bgcolor="rgba(255,255,255,0.8)",
-        )
-
-    if "regression_line" in df_original_truncated.columns:
-        reg_val = df_original_truncated["regression_line"].iloc[-1]
-        fig.add_annotation(
-            x=df_original_truncated["day_index"].iloc[-1],
-            y=reg_val,
-            text=f"  Trend: {reg_val:.1%}",
-            showarrow=False,
-            xanchor="left",
-            font={"size": 9, "color": colors["regression_truncated"]},
-            bgcolor="rgba(255,255,255,0.8)",
-        )
-
     num_days = len(df_new)
     tick_positions = [0, num_days // 4, num_days // 2, 3 * num_days // 4, num_days - 1]
     tick_positions = [position for position in tick_positions if position < len(df_new)]
     new_period_dates = [df_new.iloc[position]["hover_date"] for position in tick_positions]
+    summary_annotation_text = (
+        f"<b>Latest:</b> ${latest_price:.2f} ({latest_cum_pct:+.2%}) on {latest_date_short} | "
+        f"<b>Band:</b> {band_label} | <b>Source:</b> {source.upper()}"
+    )
+    if freshness_warning:
+        summary_annotation_text += f"<br><b>Data warning:</b> {freshness_warning_html}"
 
     fig.update_layout(
         title={
@@ -392,20 +368,16 @@ def plot_comparison(
         },
         annotations=[
             {
-                "text": (
-                    f"<b>Latest:</b> ${latest_price:.2f} ({latest_cum_pct:+.2%}) on {latest_date_short} | "
-                    f"<b>Band:</b> {band_label} | <b>Source:</b> {source.upper()}"
-                ),
+                "text": summary_annotation_text,
                 "xref": "paper",
                 "yref": "paper",
                 "x": 0.5,
-                "y": 1.06,
+                "y": 1.08 if freshness_warning else 1.06,
                 "showarrow": False,
                 "font": {"size": 12, "color": colors["text"]},
                 "xanchor": "center",
             }
-        ]
-        + list(fig.layout.annotations),
+        ],
         xaxis={
             "title": {"text": "Aligned Trading Days", "font": {"size": 12, "color": colors["text"]}},
             "showgrid": True,
@@ -467,7 +439,7 @@ def plot_comparison(
         },
         template="plotly_white",
         font={"family": "Arial, sans-serif", "size": 12, "color": colors["text"]},
-        margin={"l": 60, "r": 60, "t": 100, "b": 120},
+        margin={"l": 60, "r": 60, "t": 120 if freshness_warning else 100, "b": 120},
         plot_bgcolor="#ffffff",
         paper_bgcolor="#fafafa",
     )
@@ -531,6 +503,14 @@ def plot_comparison(
         logging.error(f"Failed to save full-term plot as JPEG: {exc}")
         full_file_jpeg = None
 
+    freshness_banner = ""
+    if freshness_warning:
+        freshness_banner = f"""
+            <div class="freshness-warning">
+                <strong>Data warning:</strong> {freshness_warning_html}
+            </div>
+"""
+
     html_header = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -578,6 +558,16 @@ def plot_comparison(
         .info-value.price {{ color: #1a2332; }}
         .info-value.positive {{ color: #2d6a4f; }}
         .info-value.negative {{ color: #9b2c2c; }}
+        .info-value.fresh {{ color: #2d6a4f; }}
+        .info-value.stale {{ color: #9b2c2c; }}
+        .freshness-warning {{
+            padding: 14px 24px;
+            background: #fff4e5;
+            border-bottom: 1px solid #f1c27d;
+            color: #7c3d00;
+            font-size: 14px;
+            line-height: 1.5;
+        }}
         .chart-container {{ padding: 0; }}
         .legend-guide {{ padding: 20px 24px; background: #f7fafc; border-top: 1px solid #e2e8f0; }}
         .legend-guide h3 {{
@@ -645,10 +635,19 @@ def plot_comparison(
                     <span class="info-value">{latest_date_short}</span>
                 </div>
                 <div class="info-item">
+                    <span class="info-label">Data Status</span>
+                    <span class="info-value {'stale' if freshness_warning else 'fresh'}">{freshness_status}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Data Age</span>
+                    <span class="info-value">{freshness_detail}</span>
+                </div>
+                <div class="info-item">
                     <span class="info-label">Data Source</span>
                     <span class="info-value">{source.upper()}</span>
                 </div>
             </div>
+{freshness_banner}
 
             <div class="chart-container">
 """
@@ -790,8 +789,10 @@ def generate_comparison_report(
     original_start=None,
     original_end=None,
     new_start=None,
+    data_freshness=None,
 ):
     """Generate report artifacts and the stable summary payload."""
+    data_freshness = data_freshness or {}
     zoomed_jpeg_path, full_jpeg_path, html_path = plot_comparison(
         symbol,
         df_original,
@@ -805,6 +806,7 @@ def generate_comparison_report(
         original_start=original_start or "2016-11-08",
         original_end=original_end or "2020-11-03",
         new_start=new_start or "2024-11-05",
+        data_freshness=data_freshness,
     )
 
     report = build_band_snapshot(df_original_truncated, df_new)
@@ -813,6 +815,11 @@ def generate_comparison_report(
             "zoomed_jpeg_path": zoomed_jpeg_path,
             "full_jpeg_path": full_jpeg_path,
             "html_path": html_path,
+            "data_freshness": data_freshness,
+            "freshness_warning": data_freshness.get("warning"),
+            "latest_data_age_days": data_freshness.get("age_days"),
+            "max_data_age_days": data_freshness.get("max_age_days"),
+            "freshness_checked_at": data_freshness.get("checked_at"),
         }
     )
     return report

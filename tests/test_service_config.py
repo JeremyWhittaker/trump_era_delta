@@ -349,6 +349,15 @@ class ServiceConfigTests(unittest.TestCase):
 
             self.assertTrue(any("alerts.recipients_file does not exist" in issue for issue in issues))
 
+    def test_validate_service_config_reports_invalid_max_data_age(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = self._valid_config(Path(tmpdir), metadata={"local_config_exists": True})
+            config["monitor"]["max_data_age_days"] = "not-a-number"
+
+            issues = service_config.validate_service_config(config, gmail_config=None, require_gmail=False)
+
+            self.assertTrue(any("monitor.max_data_age_days" in issue for issue in issues))
+
     def test_redact_service_config_removes_password_keys(self):
         redacted = service_config.redact_service_config(
             {

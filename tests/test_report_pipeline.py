@@ -85,6 +85,11 @@ class ReportPipelineTests(unittest.TestCase):
                 "zoomed_jpeg_path",
                 "full_jpeg_path",
                 "html_path",
+                "data_freshness",
+                "freshness_warning",
+                "latest_data_age_days",
+                "max_data_age_days",
+                "freshness_checked_at",
                 "current_band",
                 "current_pct",
                 "regression_line",
@@ -97,6 +102,42 @@ class ReportPipelineTests(unittest.TestCase):
         self.assertEqual(result["full_jpeg_path"], full_path)
         self.assertEqual(result["html_path"], html_path)
         plot_comparison.assert_called_once()
+
+    def test_generate_comparison_report_carries_freshness_metadata(self):
+        data_freshness = {
+            "warning": "Latest VOO alpaca bar is 3 calendar days old.",
+            "age_days": 3,
+            "max_age_days": 2,
+            "checked_at": "2026-05-08T00:00:00+00:00",
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            with mock.patch.object(
+                report_pipeline,
+                "plot_comparison",
+                return_value=(tmp_path / "zoomed.jpeg", tmp_path / "full.jpeg", tmp_path / "report.html"),
+            ) as plot_comparison:
+                result = report_pipeline.generate_comparison_report(
+                    symbol="VOO",
+                    source="alpaca",
+                    df_original=self._truncated_reference_frame(),
+                    df_original_truncated=self._truncated_reference_frame(),
+                    df_new=self._new_frame(),
+                    output_dir=tmp_path,
+                    sma_window=100,
+                    data_freshness=data_freshness,
+                )
+
+        self.assertEqual(result["data_freshness"], data_freshness)
+        self.assertEqual(result["freshness_warning"], data_freshness["warning"])
+        self.assertEqual(result["latest_data_age_days"], 3)
+        self.assertEqual(result["max_data_age_days"], 2)
+        self.assertEqual(result["freshness_checked_at"], data_freshness["checked_at"])
+        self.assertEqual(
+            plot_comparison.call_args.kwargs["data_freshness"],
+            data_freshness,
+        )
 
 
 if __name__ == "__main__":

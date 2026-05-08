@@ -269,6 +269,14 @@ def validate_service_config(config, gmail_config=None, require_gmail=False):
     if new_start and new_end and new_start > new_end:
         issues.append("monitor.new_start must be on or before monitor.new_end.")
 
+    max_data_age_days = monitor.get("max_data_age_days", 2)
+    try:
+        parsed_max_data_age_days = int(max_data_age_days)
+        if parsed_max_data_age_days < 0:
+            issues.append("monitor.max_data_age_days must be zero or greater.")
+    except (TypeError, ValueError):
+        issues.append("monitor.max_data_age_days must be an integer number of days.")
+
     alerts = config.get("alerts", {})
     recipients = alerts.get("recipients", [])
     recipients_file = alerts.get("recipients_file")
