@@ -66,15 +66,36 @@ class AlertPipelineTests(unittest.TestCase):
                 new_start="2024-11-05",
                 delivery_mode="test",
             )
+            monthly_payload = alert_pipeline.build_alert_payload(
+                symbol="VOO",
+                source="alpaca",
+                previous_band=1,
+                report=report,
+                days_original=100,
+                days_new=50,
+                sma_window=100,
+                check_frequency=15,
+                original_start="2016-11-08",
+                original_end="2020-11-03",
+                new_start="2024-11-05",
+                delivery_mode="monthly",
+            )
 
         self.assertEqual(live_payload["html_body"], test_payload["html_body"])
+        self.assertEqual(live_payload["html_body"], monthly_payload["html_body"])
         self.assertEqual(live_payload["text_body"], test_payload["text_body"])
+        self.assertEqual(live_payload["text_body"], monthly_payload["text_body"])
         self.assertEqual(live_payload["inline_images"], test_payload["inline_images"])
+        self.assertEqual(live_payload["inline_images"], monthly_payload["inline_images"])
         self.assertEqual(
             [image["cid"] for image in live_payload["inline_images"]],
             ["chart_zoomed", "chart_full"],
         )
         self.assertEqual(live_payload["subject"], "Regression Band Alert: VOO -> +1σ")
+        self.assertEqual(
+            monthly_payload["subject"],
+            "Monthly Trump Trade Setup Update: VOO @ +1σ (+15.00%)",
+        )
         self.assertEqual(test_payload["subject"], "TEST EMAIL: VOO @ +1σ (+15.00%)")
 
     def test_send_alert_email_forwards_normalized_payload_to_smtp(self):

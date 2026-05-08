@@ -58,6 +58,8 @@ def _build_subject(symbol, report, delivery_mode):
     band_label = _format_band_label(report["current_band"])
     if delivery_mode == "live":
         return f"Regression Band Alert: {symbol} -> {band_label}"
+    if delivery_mode == "monthly":
+        return f"Monthly Trump Trade Setup Update: {symbol} @ {band_label} ({report['current_pct']:+.2%})"
     if delivery_mode == "test":
         return f"TEST EMAIL: {symbol} @ {band_label} ({report['current_pct']:+.2%})"
     raise ValueError(f"Unsupported delivery mode: {delivery_mode}")

@@ -10,9 +10,11 @@ from shutil import copyfile
 
 from alert_pipeline import build_alert_payload, send_alert_email
 from alert_state import (
+    evaluate_monthly_update,
     evaluate_transition,
     load_alert_state,
     record_delivery_result,
+    record_monthly_update_result,
     resolve_alert_state_path,
     save_alert_state,
 )
@@ -382,6 +384,82 @@ def _load_runtime_alert_state(log_path, alert_state_path):
     return state_path, load_alert_state(state_path)
 
 
+def _send_monthly_update_if_due(
+    *,
+    state,
+    state_path,
+    observed_at,
+    symbol,
+    source,
+    report,
+    analysis_result,
+    sma_window,
+    check_frequency,
+    original_start,
+    original_end,
+    new_start,
+    email_notifications,
+    email_recipients,
+    fail_on_delivery_error=False,
+):
+    if not email_notifications:
+        return state, True
+
+    monthly_result = evaluate_monthly_update(state, observed_at)
+    monthly_update = monthly_result["monthly_update"]
+    if not monthly_update or monthly_result["action"] not in {"new_monthly_update", "retry_pending"}:
+        return monthly_result["state"], True
+
+    state = monthly_result["state"]
+    save_alert_state(state_path, state)
+
+    if monthly_result["action"] == "retry_pending":
+        logging.info(
+            "Retrying pending monthly Trump trade setup update for %s.",
+            monthly_update["month"],
+        )
+    else:
+        logging.info(
+            "Sending monthly Trump trade setup update for %s.",
+            monthly_update["month"],
+        )
+
+    payload = build_alert_payload(
+        symbol=symbol,
+        source=source,
+        previous_band=report["current_band"],
+        report=report,
+        days_original=len(analysis_result["reference_frame"]),
+        days_new=len(analysis_result["current_frame"]),
+        sma_window=sma_window,
+        check_frequency=check_frequency,
+        original_start=original_start,
+        original_end=original_end,
+        new_start=new_start,
+        delivery_mode="monthly",
+    )
+    success, message = send_alert_email(
+        recipients=email_recipients,
+        payload=payload,
+    )
+    state = record_monthly_update_result(
+        state,
+        monthly_update,
+        delivered=success,
+        error_message=None if success else message,
+    )
+    save_alert_state(state_path, state)
+
+    if success:
+        logging.info("Monthly Trump trade setup update sent successfully.")
+    else:
+        logging.error(f"Failed to send monthly update email: {message}")
+        if fail_on_delivery_error:
+            return state, False
+
+    return state, True
+
+
 def _run_monitor_cycle(
     *,
     state,
@@ -491,6 +569,26 @@ def _run_monitor_cycle(
                 logging.error(f"Failed to send email: {message}")
                 if fail_on_delivery_error:
                     return state, False
+
+    state, monthly_ok = _send_monthly_update_if_due(
+        state=state,
+        state_path=state_path,
+        observed_at=observed_at,
+        symbol=symbol,
+        source=source,
+        report=report,
+        analysis_result=analysis_result,
+        sma_window=sma_window,
+        check_frequency=check_frequency,
+        original_start=original_start,
+        original_end=original_end,
+        new_start=new_start,
+        email_notifications=email_notifications,
+        email_recipients=email_recipients,
+        fail_on_delivery_error=fail_on_delivery_error,
+    )
+    if not monthly_ok:
+        return state, False
 
     return state, True
 

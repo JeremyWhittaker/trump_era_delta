@@ -37,6 +37,12 @@ Progress: [██████░░░░] 60%
 
 *Updated after each plan completion*
 
+## Quick Tasks Completed
+
+| Date | Task | Summary |
+|------|------|---------|
+| 2026-05-08 | Monthly Trump trade setup update | Added first-day monthly status email scheduling, persisted delivery state, monthly subject, docs, and tests. |
+
 ## Accumulated Context
 
 ### Decisions

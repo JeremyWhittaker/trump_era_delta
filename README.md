@@ -174,7 +174,9 @@ python3 main.py run
 
 `run`, `run --once`, `report`, and `test-email` now share the same validated analysis core and chart/report generation path. `report` never invokes SMTP; `test-email` proves the real email path; `run --once` executes one live alert-evaluation cycle without entering the long-running loop.
 
-The monitor checks the latest available symbol bar before generating report artifacts. If the latest bar is older than `monitor.max_data_age_days` (default: 2 calendar days), the HTML/JPEG report includes a stale-data warning and live monitoring skips regression-band alert evaluation for that cycle.
+The monitor checks the latest available symbol bar before generating report artifacts. If the latest bar is older than `monitor.max_data_age_days` (default: 2 calendar days), the HTML/JPEG report includes a stale-data warning and live monitoring skips regression-band alert evaluation and monthly status delivery for that cycle.
+
+When `alerts.enabled` is true, the live monitor also sends a monthly Trump trade setup status email on the first UTC day of each month. The send is recorded in the persisted alert state after successful delivery, so repeated service cycles on the first day do not duplicate the monthly update.
 
 ### Config Files
 
@@ -237,6 +239,8 @@ When the market crosses a regression band threshold, the system sends a professi
 - **Statistical Metrics**: Current cumulative return, regression line, and all band values
 - **Embedded Chart**: High-resolution visualization inline (not as attachment)
 - **Interpretation Guide**: Context for understanding the signal
+
+The same email payload is reused for monthly status updates, with the subject format `Monthly Trump Trade Setup Update: SYMBOL @ BAND (RETURN%)`.
 
 The email design follows institutional standards with a navy/charcoal/gold color palette.
 

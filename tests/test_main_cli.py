@@ -412,6 +412,139 @@ class MainCliTests(unittest.TestCase):
         save_alert_state.assert_not_called()
         send_alert_email.assert_not_called()
 
+    def test_monitor_cycle_sends_monthly_update_once_on_first_day(self):
+        main = self._load_main()
+
+        class FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 6, 1, 12, 0, tzinfo=tz or timezone.utc)
+
+        state = {
+            "last_observed_band": -1,
+            "pending_transition": None,
+            "last_delivered_transition": None,
+            "pending_monthly_update": None,
+            "last_monthly_update": None,
+            "last_error": None,
+        }
+        report = {
+            "current_band": -1,
+            "freshness_warning": None,
+        }
+
+        with mock.patch.object(main, "datetime", FixedDatetime), mock.patch.object(
+            main,
+            "_run_analysis_report",
+            return_value={
+                "report": report,
+                "reference_frame": [1, 2],
+                "current_frame": [1],
+            },
+        ), mock.patch.object(
+            main,
+            "build_alert_payload",
+            return_value={"subject": "Monthly Trump Trade Setup Update"},
+        ) as build_alert_payload, mock.patch.object(
+            main, "send_alert_email", return_value=(True, "ok")
+        ) as send_alert_email, mock.patch.object(
+            main, "save_alert_state"
+        ) as save_alert_state:
+            returned_state, cycle_ok = main._run_monitor_cycle(
+                state=state,
+                state_path=Path("runtime/alert_state.json"),
+                symbol="VOO",
+                source="alpaca",
+                original_start="2016-11-08",
+                original_end="2020-11-03",
+                new_start="2024-11-05",
+                new_end=date.today().isoformat(),
+                sma_window=100,
+                plot_bands=True,
+                plot_bollinger_bands=False,
+                email_notifications=True,
+                email_recipients=["ops@example.com"],
+                check_frequency=15,
+                html_output_path="./plots/index.html",
+                data_dir="./data",
+                data_type="adjusted",
+                read_symbol_data_fn=object(),
+            )
+
+        self.assertTrue(cycle_ok)
+        self.assertEqual(returned_state["last_monthly_update"]["month"], "2026-06")
+        self.assertIsNone(returned_state["pending_monthly_update"])
+        build_alert_payload.assert_called_once()
+        self.assertEqual(build_alert_payload.call_args.kwargs["delivery_mode"], "monthly")
+        self.assertEqual(build_alert_payload.call_args.kwargs["previous_band"], -1)
+        send_alert_email.assert_called_once()
+        self.assertEqual(save_alert_state.call_count, 3)
+
+    def test_monitor_cycle_does_not_repeat_delivered_monthly_update(self):
+        main = self._load_main()
+
+        class FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 6, 1, 13, 0, tzinfo=tz or timezone.utc)
+
+        state = {
+            "last_observed_band": -1,
+            "pending_transition": None,
+            "last_delivered_transition": None,
+            "pending_monthly_update": None,
+            "last_monthly_update": {
+                "month": "2026-06",
+                "observed_at": "2026-06-01T12:00:00+00:00",
+                "delivered_at": "2026-06-01T12:01:00+00:00",
+            },
+            "last_error": None,
+        }
+
+        with mock.patch.object(main, "datetime", FixedDatetime), mock.patch.object(
+            main,
+            "_run_analysis_report",
+            return_value={
+                "report": {
+                    "current_band": -1,
+                    "freshness_warning": None,
+                },
+                "reference_frame": [1, 2],
+                "current_frame": [1],
+            },
+        ), mock.patch.object(
+            main, "build_alert_payload"
+        ) as build_alert_payload, mock.patch.object(
+            main, "send_alert_email"
+        ) as send_alert_email, mock.patch.object(
+            main, "save_alert_state"
+        ):
+            returned_state, cycle_ok = main._run_monitor_cycle(
+                state=state,
+                state_path=Path("runtime/alert_state.json"),
+                symbol="VOO",
+                source="alpaca",
+                original_start="2016-11-08",
+                original_end="2020-11-03",
+                new_start="2024-11-05",
+                new_end=date.today().isoformat(),
+                sma_window=100,
+                plot_bands=True,
+                plot_bollinger_bands=False,
+                email_notifications=True,
+                email_recipients=["ops@example.com"],
+                check_frequency=15,
+                html_output_path="./plots/index.html",
+                data_dir="./data",
+                data_type="adjusted",
+                read_symbol_data_fn=object(),
+            )
+
+        self.assertTrue(cycle_ok)
+        self.assertEqual(returned_state["last_monthly_update"]["month"], "2026-06")
+        build_alert_payload.assert_not_called()
+        send_alert_email.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
